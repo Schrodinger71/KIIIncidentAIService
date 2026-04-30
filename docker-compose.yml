@@ -1,0 +1,27 @@
+services:
+  inference-api:
+    container_name: kii-significance-inference-api
+    build:
+      context: ./inference-api
+    environment:
+      MODEL_PATH: /app/models/model.keras
+      DEFAULT_MODEL_CHOICE: keras
+      ALLOW_MODEL_FALLBACK: "false"
+      # Если нужно переключиться на .h5, поменяйте MODEL_PATH на /app/models/model.h5
+      # FALLBACK_MODEL_PATH: /app/models/model.h5
+    ports:
+      - "8008:8000"
+
+  dashboard:
+    container_name: kii-significance-dashboard
+    build:
+      context: ./dashboard
+    environment:
+      API_URL: http://inference-api:8000
+      DATA_FILE: /app/data/objects.json
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard/data:/app/data
+    depends_on:
+      - inference-api
