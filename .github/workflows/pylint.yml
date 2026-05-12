@@ -1,0 +1,35 @@
+name: Pylint
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  pylint:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [inference-api, dashboard]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd ${{ matrix.service }}
+        pip install -r requirements.txt
+        pip install pylint
+
+    - name: Run pylint
+      run: |
+        cd ${{ matrix.service }}
+        pylint app.py --fail-under=8.0
+      continue-on-error: true

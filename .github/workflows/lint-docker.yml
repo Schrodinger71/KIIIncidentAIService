@@ -1,0 +1,30 @@
+name: Lint Dockerfiles
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '**/Dockerfile'
+      - 'docker-compose.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run hadolint
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: inference-api/Dockerfile
+    
+    - name: Run hadolint for dashboard
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: dashboard/Dockerfile
+    
+    - name: Check docker-compose.yml
+      run: |
+        docker-compose config -q
+  
