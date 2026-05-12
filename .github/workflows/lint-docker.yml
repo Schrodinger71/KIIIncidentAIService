@@ -25,5 +25,4 @@ jobs:
     
     - name: Check docker-compose.yml
       run: |
-        docker-compose config -q
-  
+        docker compose config -q
