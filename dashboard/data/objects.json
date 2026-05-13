@@ -651,5 +651,70 @@
       "Подготовить сценарии отказа и план обеспечения непрерывности процессов.",
       "Зафиксировать интеграции и критичные зависимости в технологическом контуре."
     ]
+  },
+  {
+    "id": "OBJ-B4CF61",
+    "created_at": "2026-05-13T13:25:40",
+    "object_name": "Тест1",
+    "sector": "energy",
+    "ownership_level": "municipal",
+    "service_scale": "federal",
+    "process_criticality": 7,
+    "supported_users": 250000,
+    "territories_count": 3,
+    "annual_financial_loss_million": 150.0,
+    "recovery_time_hours": 12,
+    "critical_processes": 4,
+    "interactions_count": 15,
+    "personal_data_subjects": 50000,
+    "employees_affected": 1500,
+    "continuous_operation": true,
+    "scada_used": false,
+    "government_services": false,
+    "life_safety_impact": false,
+    "ecological_impact": false,
+    "defense_impact": false,
+    "public_order_impact": true,
+    "transport_disruption": false,
+    "communications_disruption": false,
+    "classified_info": true,
+    "predicted_category": "Вторая категория",
+    "significance_score": 65,
+    "category_level": 2,
+    "heuristic_class": 2,
+    "confidence": 0.448,
+    "model_loaded": true,
+    "model_usable": false,
+    "model_source": "/app/models/model.keras (manual archive load)",
+    "model_diagnostic": "degenerate_constant_prediction",
+    "model_role": "heuristic_only",
+    "heuristic_probabilities": {
+      "Без категории": 0.05,
+      "Третья категория": 0.17,
+      "Вторая категория": 0.61,
+      "Первая категория": 0.17
+    },
+    "model_probabilities": {
+      "Без категории": 0.25,
+      "Третья категория": 0.25,
+      "Вторая категория": 0.25,
+      "Первая категория": 0.25
+    },
+    "combined_probabilities": {
+      "Без категории": 0.14,
+      "Третья категория": 0.206,
+      "Вторая категория": 0.448,
+      "Первая категория": 0.206
+    },
+    "key_factors": [
+      "влияние на общественный порядок",
+      "масштаб оказания услуг выше локального уровня"
+    ],
+    "summary": "Объект 'Тест1' отнесен к категории 'Вторая категория'. Интегральная оценка значимости: 65/100. Ключевые факторы: влияние на общественный порядок, масштаб оказания услуг выше локального уровня.",
+    "recommendations": [
+      "Усилить меры защиты, сегментацию и контроль доступа к объекту КИИ.",
+      "Подготовить сценарии отказа и план обеспечения непрерывности процессов.",
+      "Зафиксировать интеграции и критичные зависимости в технологическом контуре."
+    ]
   }
 ]
