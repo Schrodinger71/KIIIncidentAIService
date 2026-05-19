@@ -118,26 +118,42 @@ def configured_model_paths() -> list[Path]:
     explicit_model = os.getenv("MODEL_PATH")
     fallback_model = os.getenv("FALLBACK_MODEL_PATH")
     allow_fallback = os.getenv("ALLOW_MODEL_FALLBACK", "false").lower() == "true"
+    base_dir = Path(__file__).resolve().parent
 
     paths: list[Path] = []
     predefined_models = {
-        "keras": Path("/app/models/model.keras"),
-        "h5": Path("/app/models/model.h5"),
+        "keras": [
+            base_dir / "models" / "model.keras",
+            Path("/app/models/model.keras"),
+        ],
+        "h5": [
+            base_dir / "models" / "model.h5",
+            Path("/app/models/model.h5"),
+        ],
     }
 
-    if ACTIVE_MODEL_CHOICE in predefined_models:
-        paths.append(predefined_models[ACTIVE_MODEL_CHOICE])
-    elif explicit_model:
+    if explicit_model:
         paths.append(Path(explicit_model))
+    elif ACTIVE_MODEL_CHOICE in predefined_models:
+        paths.extend(predefined_models[ACTIVE_MODEL_CHOICE])
     else:
-        paths.append(Path("/app/models/model.keras"))
+        paths.extend(predefined_models["keras"])
 
     if allow_fallback and fallback_model:
         fallback_path = Path(fallback_model)
         if fallback_path not in paths:
             paths.append(fallback_path)
 
-    return paths
+    deduplicated_paths: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path.resolve(strict=False))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated_paths.append(path)
+
+    return deduplicated_paths
 
 
 def load_model() -> None:

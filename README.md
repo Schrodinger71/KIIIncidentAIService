@@ -1,208 +1,251 @@
 # KII Significance Service
 
-Тема проекта: `Применение инструментов DevOps для создания приложения "Определение категории значимости объекта КИИ"`.
+Проект определяет категорию значимости объекта КИИ и состоит из двух сервисов:
 
-Платформа контейнеризации: `Docker Personal`.
+- `inference-api` на `FastAPI` рассчитывает итоговую категорию и отдает REST API.
+- `dashboard` на `Streamlit` предоставляет веб-интерфейс для ввода данных и просмотра результатов.
 
-Сайт продукта: `https://www.docker.com/products/personal/`
+Дополнительно есть каталог `model-training` со скриптами обучения и проверки модели.
 
-## Назначение
-
-Это standalone-приложение определяет категорию значимости объекта критической информационной инфраструктуры по его характеристикам.
-
-
-## Что реализовано
-
-- web-интерфейс на `Streamlit`;
-- AI/API-сервис на `FastAPI`;
-- контейнеризация через `Docker` и `docker-compose`;
-- определение категории значимости объекта КИИ;
-- больше `15` входных характеристик объекта;
-- сохранение demo-реестра объектов;
-- визуализация вклада эвристики и ИИ-модели в итоговую категорию.
-
-## Архитектура
+## Структура проекта
 
 ```text
 KIIIncidentAIService/
-  dashboard/
-    app.py
-    Dockerfile
-    requirements.txt
-    data/objects.json
+  README.md
+  docker-compose.yml
   inference-api/
     app.py
     Dockerfile
     requirements.txt
     models/
-      model.h5
       model.keras
-  docker-compose.yml
+      model.h5
+  dashboard/
+    app.py
+    Dockerfile
+    requirements.txt
+    data/
+      objects.json
+      incidents.json
+  model-training/
+    finetune_kii.py
+    validate_inference.py
+    retrain_model.py
+    generate_synthetic_data.py
+    requirements.txt
+    sitecustomize.py
+    synthetic_kii_data.csv
+  Tools/
+    DataConverter/
+      converter.py
+      synthetic_kii_data.py
+      kii_converted.py
+      convert.xlsx
+      Converted.xlsx
 ```
 
-## Запуск
+## Для чего нужен каждый файл
 
-Из папки `KIIIncidentAIService`:
+### Корень проекта
 
-```bash
+- `README.md` - инструкция по запуску, обучению и структуре проекта.
+- `docker-compose.yml` - поднимает `inference-api` и `dashboard` одной командой.
+
+### `inference-api/`
+
+- `inference-api/app.py` - основной FastAPI-сервис: загрузка модели, `/health`, `/predict`, выбор модели и гибридная логика `heuristics + ML`.
+- `inference-api/Dockerfile` - контейнер API.
+- `inference-api/requirements.txt` - Python-зависимости API.
+- `inference-api/models/model.keras` - основной файл обученной модели для inference.
+- `inference-api/models/model.h5` - резервная копия модели в формате H5.
+
+### `dashboard/`
+
+- `dashboard/app.py` - Streamlit-приложение для работы с API и отображения данных.
+- `dashboard/Dockerfile` - контейнер dashboard.
+- `dashboard/requirements.txt` - зависимости dashboard.
+- `dashboard/data/objects.json` - локальный JSON-реестр объектов КИИ для интерфейса.
+- `dashboard/data/incidents.json` - локальные данные по инцидентам для интерфейса.
+
+### `model-training/`
+
+- `model-training/finetune_kii.py` - основной скрипт дообучения модели, совместимой с `inference-api`.
+- `model-training/validate_inference.py` - локальная проверка, что API реально загружает сохраненную модель и использует ее в `/predict`.
+- `model-training/retrain_model.py` - альтернативный скрипт полного переобучения модели и сохранения дополнительных артефактов.
+- `model-training/generate_synthetic_data.py` - генерация синтетического CSV-датасета для обучения.
+- `model-training/requirements.txt` - зависимости для обучения и валидации модели.
+- `model-training/sitecustomize.py` - локальный патч совместимости сохранения `.keras` для используемой версии `tf.keras`.
+- `model-training/synthetic_kii_data.csv` - синтетический датасет для обучения и валидации.
+
+### `Tools/DataConverter/`
+
+- `Tools/DataConverter/converter.py` - утилита конвертации Excel-данных в пригодную для обработки структуру.
+- `Tools/DataConverter/synthetic_kii_data.py` - вспомогательный скрипт подготовки или преобразования данных для обучения.
+- `Tools/DataConverter/kii_converted.py` - вспомогательный скрипт работы с уже преобразованными данными.
+- `Tools/DataConverter/convert.xlsx` - исходный Excel-файл для конвертации.
+- `Tools/DataConverter/Converted.xlsx` - результат конвертации Excel-данных.
+
+## Как устроена модель
+
+- API использует гибридный подход: эвристический скоринг плюс нейросетевая классификация.
+- Каноническое место хранения модели для сервиса: `inference-api/models/`.
+- Основной формат: `model.keras`.
+- Резервный формат: `model.h5`.
+
+Категории:
+
+- `0` - `Без категории`
+- `1` - `Третья категория`
+- `2` - `Вторая категория`
+- `3` - `Первая категория`
+
+## Подготовка локального окружения
+
+Команды ниже рассчитаны на `PowerShell` и выполняются из корня проекта.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r .\model-training\requirements.txt
+pip install -r .\inference-api\requirements.txt
+pip install httpx
+```
+
+`httpx` нужен для `fastapi.testclient`, который использует `model-training/validate_inference.py`.
+
+## Обучение модели
+
+Если датасет уже есть, можно сразу запускать дообучение:
+
+```powershell
+cd .\model-training
+python .\finetune_kii.py
+cd ..
+```
+
+Если нужен новый синтетический датасет:
+
+```powershell
+cd .\model-training
+python .\generate_synthetic_data.py
+python .\finetune_kii.py
+cd ..
+```
+
+После успешного обучения ожидаются файлы:
+
+- `inference-api/models/model.keras`
+- `inference-api/models/model.h5`
+
+## Проверка модели перед запуском сервиса
+
+После обучения выполните:
+
+```powershell
+python .\model-training\validate_inference.py
+```
+
+Успешная проверка выглядит так:
+
+- `model_loaded: true`
+- `model_usable: true`
+- `model_role: supporting_classifier`
+- в конце выводится `ПРОВЕРКА ПРОЙДЕНА: API загрузил и использует обученную модель.`
+
+## Запуск сервиса через Docker Compose
+
+Если модель уже лежит в `inference-api/models/`, сервис можно поднимать сразу:
+
+```powershell
 docker compose up --build
 ```
 
-После запуска:
+Запуск в фоне:
+
+```powershell
+docker compose up --build -d
+```
+
+Остановка:
+
+```powershell
+docker compose down
+```
+
+После старта сервисы доступны по адресам:
 
 - Dashboard: `http://localhost:8501`
-- API docs: `http://localhost:8008/docs`
+- Swagger UI API: `http://localhost:8008/docs`
 - Health endpoint: `http://localhost:8008/health`
 
-## Входные данные
+## Полный рекомендуемый сценарий запуска
 
-Приложение использует более 15 входных характеристик объекта КИИ. В текущей версии UI и API принимают:
-
-- наименование объекта;
-- сектор КИИ;
-- уровень объекта;
-- масштаб оказания услуг;
-- критичность процесса;
-- количество пользователей;
-- количество территорий;
-- прогнозируемый финансовый ущерб;
-- время восстановления;
-- число критичных процессов;
-- число интеграций и связей;
-- число субъектов персональных данных;
-- число сотрудников под влиянием отказа;
-- непрерывный режим работы;
-- использование АСУ ТП;
-- оказание государственных услуг;
-- влияние на жизнь и здоровье;
-- экологические последствия;
-- влияние на оборону;
-- влияние на общественный порядок;
-- влияние на транспорт;
-- влияние на связь;
-- наличие чувствительной информации.
-
-## Как определяется категория
-
-В текущей реализации используется гибридный подход:
-
-1. Эвристическая часть вычисляет `significance_score` от `0` до `100`.
-2. Предобученная модель выдает вероятности по 4 классам.
-3. Итоговые вероятности объединяются:
-
-```text
-combined = heuristics * 0.55 + model * 0.45
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r .\model-training\requirements.txt
+pip install -r .\inference-api\requirements.txt
+pip install httpx
+cd .\model-training
+python .\finetune_kii.py
+cd ..
+python .\model-training\validate_inference.py
+docker compose up --build -d
 ```
 
-4. По итоговому распределению выбирается категория значимости.
+## Что делает `docker-compose.yml`
 
-### Интерпретация классов
+- собирает контейнер `inference-api` из `./inference-api`
+- собирает контейнер `dashboard` из `./dashboard`
+- публикует API на `8008`
+- публикует dashboard на `8501`
+- передает в API:
+  - `MODEL_PATH=/app/models/model.keras`
+  - `DEFAULT_MODEL_CHOICE=keras`
+  - `ALLOW_MODEL_FALLBACK=false`
 
-- `0` -> `Без категории`
-- `1` -> `Третья категория`
-- `2` -> `Вторая категория`
-- `3` -> `Первая категория`
-
-## Роль ИИ-модели
-
-Важно: в этом проекте модель не является единственным источником решения.
-
-Сейчас ее роль такая:
-
-- в первую очередь загружается `model.keras`;
-- при необходимости резервно может использоваться `model.h5`;
-- она выдает вероятности по 4 классам;
-- она участвует в итоговой категории как `supporting classifier`;
-- если модель не загрузилась, сервис продолжает работать в `heuristic_only` режиме.
-
-### Явный выбор модели
-
-В `docker-compose.yml` можно явно указать, какую модель загружать.
-
-По умолчанию сейчас используется строго:
-
-```yaml
-MODEL_PATH: /app/models/model.keras
-ALLOW_MODEL_FALLBACK: "false"
-```
-
-Если нужно использовать `model.h5`, можно заменить:
+Если нужно принудительно использовать H5-модель, замените в `docker-compose.yml`:
 
 ```yaml
 MODEL_PATH: /app/models/model.h5
-ALLOW_MODEL_FALLBACK: "false"
+DEFAULT_MODEL_CHOICE: h5
 ```
 
-Если нужен резервный сценарий, можно включить fallback:
+## Почему могли появиться дубли `model.h5` и `model.keras`
 
-```yaml
-MODEL_PATH: /app/models/model.keras
-FALLBACK_MODEL_PATH: /app/models/model.h5
-ALLOW_MODEL_FALLBACK: "true"
-```
+Штатное место хранения моделей только одно:
 
-То есть:
+- `inference-api/models/model.keras`
+- `inference-api/models/model.h5`
 
-- `significance_score` идет в основном от правил;
-- `predicted_category` и `confidence` зависят от объединения правил и модели;
-- приложение остается работоспособным даже без успешной загрузки модели.
+Если в проекте появились дополнительные копии в каталогах вроде:
 
-## Что возвращает API
+- `models/`
+- `model-training/models/`
+- `inference-api/inference-api/models/`
 
-`POST /predict` возвращает:
+это не часть нормального развёртывания. Такие дубли были временным побочным эффектом диагностического скрипта валидации, который раскладывал модель по нескольким относительным путям для поиска ошибки загрузки. Текущая версия `model-training/validate_inference.py` больше этого не делает, а `inference-api/app.py` теперь ищет модель относительно собственного файла.
 
-- `predicted_category` - итоговая категория значимости;
-- `significance_score` - интегральный балл;
-- `category_level` - итоговый класс `0..3`;
-- `heuristic_class` - класс только от эвристики;
-- `confidence` - уверенность финального результата;
-- `model_loaded` - факт загрузки модели;
-- `model_source` - источник модели;
-- `model_role` - `supporting_classifier` или `heuristic_only`;
-- `heuristic_probabilities` - вероятности эвристики;
-- `model_probabilities` - вероятности нейросети;
-- `combined_probabilities` - итоговые вероятности;
-- `key_factors` - ключевые факторы, повлиявшие на категорию;
-- `summary` - текстовое резюме;
-- `recommendations` - рекомендации по дальнейшим действиям.
+Лишние копии можно удалить. Оставить нужно только файлы в `inference-api/models/`.
 
-## Что видно в интерфейсе
+## Проверка состояния API после запуска
 
-В интерфейсе доступны:
+Быстрая проверка:
 
-- форма оценки объекта КИИ;
-- дашборд с реестром и графиками;
-- карточка последней AI-оценки;
-- блок `Показать вклад ИИ`, где отдельно видны:
-  - эвристика;
-  - модель;
-  - итоговое объединение.
-
-## Проверка состояния модели
-
-```bash
+```powershell
 curl http://localhost:8008/health
 ```
 
-Если в ответе:
+Если сервис использует модель, в ответе будут:
 
-- `model_loaded: true` - модель участвует в расчетах;
-- `model_loaded: false` - сервис работает только по эвристике.
+- `model_loaded: true`
+- `model_usable: true`
 
-## DevOps-составляющая
+Если модель не найдена, API все равно поднимется, но останется в эвристическом режиме.
 
-Проект соответствует теме применения инструментов DevOps, потому что включает:
+## Ограничения demo-версии
 
-- контейнеризацию приложения;
-- раздельные сервисы интерфейса и API;
-- единый orchestration-файл `docker-compose.yml`;
-- воспроизводимый запуск на другой машине;
-- изолированную среду выполнения;
-- понятную структуру для дальнейшего CI/CD.
-
-## Ограничения текущей demo-версии
-
-- используется локальный JSON, а не СУБД;
-- модель не дообучена специально на реальном датасете категорий значимости КИИ;
-- логика категории частично задается эвристически;
-- нет авторизации и ролевой модели.
+- используется синтетический датасет
+- вместо БД используется локальный JSON
+- часть логики категорирования остается эвристической
+- авторизация и ролевая модель не реализованы

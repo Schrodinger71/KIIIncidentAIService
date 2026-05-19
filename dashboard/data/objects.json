@@ -716,5 +716,200 @@
       "Подготовить сценарии отказа и план обеспечения непрерывности процессов.",
       "Зафиксировать интеграции и критичные зависимости в технологическом контуре."
     ]
+  },
+  {
+    "id": "OBJ-49F4F2",
+    "created_at": "2026-05-19T14:09:39",
+    "object_name": "Тестовый 10",
+    "sector": "government",
+    "ownership_level": "municipal",
+    "service_scale": "federal",
+    "process_criticality": 8,
+    "supported_users": 250000,
+    "territories_count": 33,
+    "annual_financial_loss_million": 150.0,
+    "recovery_time_hours": 12,
+    "critical_processes": 4,
+    "interactions_count": 15,
+    "personal_data_subjects": 50000,
+    "employees_affected": 1500,
+    "continuous_operation": true,
+    "scada_used": false,
+    "government_services": false,
+    "life_safety_impact": false,
+    "ecological_impact": false,
+    "defense_impact": false,
+    "public_order_impact": true,
+    "transport_disruption": false,
+    "communications_disruption": false,
+    "classified_info": true,
+    "predicted_category": "Первая категория",
+    "significance_score": 76,
+    "category_level": 3,
+    "heuristic_class": 3,
+    "confidence": 0.6069999933242798,
+    "model_loaded": true,
+    "model_usable": true,
+    "model_source": "/app/models/model.keras (manual archive load)",
+    "model_diagnostic": "ok",
+    "model_role": "supporting_classifier",
+    "heuristic_probabilities": {
+      "Без категории": 0.029999999329447746,
+      "Третья категория": 0.07999999821186066,
+      "Вторая категория": 0.20000000298023224,
+      "Первая категория": 0.6899999976158142
+    },
+    "model_probabilities": {
+      "Без категории": 0.000699999975040555,
+      "Третья категория": 0.017899999395012856,
+      "Вторая категория": 0.4758000075817108,
+      "Первая категория": 0.5055999755859375
+    },
+    "combined_probabilities": {
+      "Без категории": 0.01679999940097332,
+      "Третья категория": 0.05209999904036522,
+      "Вторая категория": 0.32409998774528503,
+      "Первая категория": 0.6069999933242798
+    },
+    "key_factors": [
+      "влияние на общественный порядок",
+      "масштаб оказания услуг выше локального уровня"
+    ],
+    "summary": "Объект 'Тестовый 10' отнесен к категории 'Первая категория'. Интегральная оценка значимости: 76/100. Ключевые факторы: влияние на общественный порядок, масштаб оказания услуг выше локального уровня.",
+    "recommendations": [
+      "Применить максимальный приоритет защиты и непрерывности функционирования объекта.",
+      "Подготовить расширенный план реагирования и аварийного восстановления.",
+      "Согласовать регламент контроля с учетом наиболее значимых последствий для КИИ."
+    ]
+  },
+  {
+    "id": "OBJ-ABF34C",
+    "created_at": "2026-05-19T14:11:21",
+    "object_name": "Тестовый 11",
+    "sector": "government",
+    "ownership_level": "municipal",
+    "service_scale": "federal",
+    "process_criticality": 8,
+    "supported_users": 250000,
+    "territories_count": 33,
+    "annual_financial_loss_million": 150.0,
+    "recovery_time_hours": 12,
+    "critical_processes": 4,
+    "interactions_count": 15,
+    "personal_data_subjects": 50000,
+    "employees_affected": 1500,
+    "continuous_operation": true,
+    "scada_used": false,
+    "government_services": false,
+    "life_safety_impact": false,
+    "ecological_impact": false,
+    "defense_impact": false,
+    "public_order_impact": true,
+    "transport_disruption": false,
+    "communications_disruption": false,
+    "classified_info": true,
+    "predicted_category": "Первая категория",
+    "significance_score": 76,
+    "category_level": 3,
+    "heuristic_class": 3,
+    "confidence": 0.6069999933242798,
+    "model_loaded": true,
+    "model_usable": true,
+    "model_source": "/app/models/model.keras (manual archive load)",
+    "model_diagnostic": "ok",
+    "model_role": "supporting_classifier",
+    "heuristic_probabilities": {
+      "Без категории": 0.029999999329447746,
+      "Третья категория": 0.07999999821186066,
+      "Вторая категория": 0.20000000298023224,
+      "Первая категория": 0.6899999976158142
+    },
+    "model_probabilities": {
+      "Без категории": 0.000699999975040555,
+      "Третья категория": 0.017899999395012856,
+      "Вторая категория": 0.4758000075817108,
+      "Первая категория": 0.5055999755859375
+    },
+    "combined_probabilities": {
+      "Без категории": 0.01679999940097332,
+      "Третья категория": 0.05209999904036522,
+      "Вторая категория": 0.32409998774528503,
+      "Первая категория": 0.6069999933242798
+    },
+    "key_factors": [
+      "влияние на общественный порядок",
+      "масштаб оказания услуг выше локального уровня"
+    ],
+    "summary": "Объект 'Тестовый 11' отнесен к категории 'Первая категория'. Интегральная оценка значимости: 76/100. Ключевые факторы: влияние на общественный порядок, масштаб оказания услуг выше локального уровня.",
+    "recommendations": [
+      "Применить максимальный приоритет защиты и непрерывности функционирования объекта.",
+      "Подготовить расширенный план реагирования и аварийного восстановления.",
+      "Согласовать регламент контроля с учетом наиболее значимых последствий для КИИ."
+    ]
+  },
+  {
+    "id": "OBJ-C95D8F",
+    "created_at": "2026-05-19T14:11:46",
+    "object_name": "Тестовый 15",
+    "sector": "finance",
+    "ownership_level": "municipal",
+    "service_scale": "federal",
+    "process_criticality": 7,
+    "supported_users": 250000,
+    "territories_count": 3,
+    "annual_financial_loss_million": 150.0,
+    "recovery_time_hours": 12,
+    "critical_processes": 4,
+    "interactions_count": 15,
+    "personal_data_subjects": 50000,
+    "employees_affected": 1500,
+    "continuous_operation": true,
+    "scada_used": false,
+    "government_services": false,
+    "life_safety_impact": false,
+    "ecological_impact": false,
+    "defense_impact": true,
+    "public_order_impact": false,
+    "transport_disruption": true,
+    "communications_disruption": false,
+    "classified_info": false,
+    "predicted_category": "Вторая категория",
+    "significance_score": 68,
+    "category_level": 2,
+    "heuristic_class": 2,
+    "confidence": 0.4864000082015991,
+    "model_loaded": true,
+    "model_usable": true,
+    "model_source": "/app/models/model.h5",
+    "model_diagnostic": "ok",
+    "model_role": "supporting_classifier",
+    "heuristic_probabilities": {
+      "Без категории": 0.05000000074505806,
+      "Третья категория": 0.17000000178813934,
+      "Вторая категория": 0.6100000143051147,
+      "Первая категория": 0.17000000178813934
+    },
+    "model_probabilities": {
+      "Без категории": 0.2833999991416931,
+      "Третья категория": 0.18019999563694,
+      "Вторая категория": 0.3352999985218048,
+      "Первая категория": 0.2011999934911728
+    },
+    "combined_probabilities": {
+      "Без категории": 0.1550000011920929,
+      "Третья категория": 0.1746000051498413,
+      "Вторая категория": 0.4864000082015991,
+      "Первая категория": 0.18400000035762787
+    },
+    "key_factors": [
+      "влияние на оборону и безопасность государства",
+      "масштаб оказания услуг выше локального уровня"
+    ],
+    "summary": "Объект 'Тестовый 15' отнесен к категории 'Вторая категория'. Интегральная оценка значимости: 68/100. Ключевые факторы: влияние на оборону и безопасность государства, масштаб оказания услуг выше локального уровня.",
+    "recommendations": [
+      "Усилить меры защиты, сегментацию и контроль доступа к объекту КИИ.",
+      "Подготовить сценарии отказа и план обеспечения непрерывности процессов.",
+      "Зафиксировать интеграции и критичные зависимости в технологическом контуре."
+    ]
   }
 ]
