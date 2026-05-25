@@ -1259,5 +1259,218 @@
       "Вторая категория": 0.26249998807907104,
       "Первая категория": 0.6791999936103821
     }
+  },
+  {
+    "id": "OBJ-3F9544",
+    "created_at": "2026-05-25T12:34:51",
+    "object_name": "Тест 4",
+    "sectors": [
+      "nuclear"
+    ],
+    "ownership_level": "federal",
+    "service_scale": "federal",
+    "object_type": "process_control_system",
+    "process_criticality": 7,
+    "critical_process_count": 4,
+    "interaction_count": 15,
+    "continuous_operation": true,
+    "scada_used": true,
+    "classified_info": false,
+    "life_health_applicable": true,
+    "life_health_level": 3,
+    "life_support_applicable": true,
+    "life_support_level": 3,
+    "transport_applicable": false,
+    "transport_level": 0,
+    "communications_applicable": false,
+    "communications_level": 0,
+    "government_service_applicable": false,
+    "government_service_level": 0,
+    "government_function_applicable": false,
+    "government_function_level": 0,
+    "international_treaty_applicable": false,
+    "international_treaty_level": 0,
+    "entity_income_loss_applicable": false,
+    "entity_income_loss_level": 0,
+    "federal_budget_loss_applicable": true,
+    "federal_budget_loss_level": 3,
+    "financial_market_applicable": false,
+    "financial_market_level": 0,
+    "environment_applicable": true,
+    "environment_level": 3,
+    "control_center_applicable": false,
+    "control_center_level": 0,
+    "defense_order_applicable": false,
+    "defense_order_level": 0,
+    "defense_security_system_applicable": false,
+    "defense_security_system_level": 0,
+    "predicted_category": "Первая категория",
+    "category_level": 3,
+    "significance_score": 100,
+    "confidence": 0.9125,
+    "methodology_rule": "max_applicable_indicator_level",
+    "criterion_assessments": [
+      {
+        "id": "life_health",
+        "code": "8.3.1",
+        "title": "Причинение ущерба жизни и здоровью людей",
+        "hint": "Оценка по показателю 8.3.1 после сопоставления с ПП-127.",
+        "applicable": true,
+        "level": 3,
+        "category_name": "Первая категория"
+      },
+      {
+        "id": "life_support",
+        "code": "8.3.2",
+        "title": "Нарушение функционирования объектов жизнеобеспечения населения",
+        "hint": "Используйте категорию по показателю 8.3.2 либо 0, если порог не достигнут.",
+        "applicable": true,
+        "level": 3,
+        "category_name": "Первая категория"
+      },
+      {
+        "id": "transport",
+        "code": "8.3.3",
+        "title": "Нарушение функционирования объектов транспортной инфраструктуры",
+        "hint": "Категория по показателю 8.3.3 для данного объекта.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "communications",
+        "code": "8.3.4",
+        "title": "Нарушение функционирования сети связи",
+        "hint": "Категория по показателю 8.3.4, если объект влияет на услуги связи.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "government_service",
+        "code": "8.3.5",
+        "title": "Отсутствие доступа к государственной услуге",
+        "hint": "Категория по показателю 8.3.5 после оценки времени/доли недоступности услуги.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "government_function",
+        "code": "8.3.6",
+        "title": "Нарушение функционирования государственного органа",
+        "hint": "Категория по показателю 8.3.6, если объект поддерживает функции госоргана.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "international_treaty",
+        "code": "8.3.7",
+        "title": "Нарушение условий международного договора РФ",
+        "hint": "Категория по показателю 8.3.7 либо 0, если показатель неприменим.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "entity_income_loss",
+        "code": "8.3.8",
+        "title": "Ущерб субъекту КИИ в виде снижения дохода",
+        "hint": "Категория по показателю 8.3.8 для организаций, к которым он применим.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "federal_budget_loss",
+        "code": "8.3.9",
+        "title": "Ущерб бюджету Российской Федерации",
+        "hint": "Категория по показателю 8.3.9, рассчитанная по ущербу бюджету.",
+        "applicable": true,
+        "level": 3,
+        "category_name": "Первая категория"
+      },
+      {
+        "id": "financial_market",
+        "code": "8.3.10",
+        "title": "Нарушение клиентских операций по переводу денежных средств",
+        "hint": "Категория по показателю 8.3.10 для системно значимых финансовых процессов.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "environment",
+        "code": "8.3.11",
+        "title": "Вредные воздействия на окружающую среду",
+        "hint": "Категория по показателю 8.3.11 для экологических последствий.",
+        "applicable": true,
+        "level": 3,
+        "category_name": "Первая категория"
+      },
+      {
+        "id": "control_center",
+        "code": "8.3.12",
+        "title": "Нарушение функционирования пункта управления",
+        "hint": "Категория по показателю 8.3.12 для ситуационных центров и пунктов управления.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "defense_order",
+        "code": "8.3.13",
+        "title": "Снижение показателей государственного оборонного заказа",
+        "hint": "Категория по показателю 8.3.13, если объект связан с ГОЗ.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      },
+      {
+        "id": "defense_security_system",
+        "code": "8.3.14",
+        "title": "Нарушение функционирования ИС в области обороны, безопасности и правопорядка",
+        "hint": "Категория по показателю 8.3.14 для профильных систем.",
+        "applicable": false,
+        "level": 0,
+        "category_name": "Без категории"
+      }
+    ],
+    "key_factors": [
+      "8.3.9 Ущерб бюджету Российской Федерации",
+      "8.3.2 Нарушение функционирования объектов жизнеобеспечения населения",
+      "8.3.11 Вредные воздействия на окружающую среду",
+      "8.3.1 Причинение ущерба жизни и здоровью людей"
+    ],
+    "summary": "Объект 'Тест 4' отнесен к категории 'Первая категория' по правилу методики: берется наивысшая категория из применимых показателей 8.3.*. Наибольшее влияние оказали: 8.3.9 Ущерб бюджету Российской Федерации, 8.3.2 Нарушение функционирования объектов жизнеобеспечения населения, 8.3.11 Вредные воздействия на окружающую среду.",
+    "recommendations": [
+      "Рассматривайте объект как приоритетный для непрерывности функционирования и реагирования на инциденты.",
+      "Проверьте, что обоснования по наивысшему показателю оформлены и готовы для включения в сведения по приказу ФСТЭК.",
+      "Регулярно подтверждайте актуальность категорирования при изменении архитектуры, функций и внешних связей объекта."
+    ],
+    "model_loaded": true,
+    "model_usable": true,
+    "model_source": "/app/models/model.h5 (weights-only fallback)",
+    "model_diagnostic": "ok",
+    "model_role": "supporting_classifier",
+    "heuristic_probabilities": {
+      "Без категории": 0.02879999950528145,
+      "Третья категория": 0.06729999929666519,
+      "Вторая категория": 0.15379999577999115,
+      "Первая категория": 0.75
+    },
+    "model_probabilities": {
+      "Без категории": 0.0,
+      "Третья категория": 0.0,
+      "Вторая категория": 0.0,
+      "Первая категория": 1.0
+    },
+    "combined_probabilities": {
+      "Без категории": 0.010099999606609344,
+      "Третья категория": 0.023600000888109207,
+      "Вторая категория": 0.05389999970793724,
+      "Первая категория": 0.9125000238418579
+    }
   }
 ]
