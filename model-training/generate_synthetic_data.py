@@ -1,220 +1,154 @@
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
-# --- Настройки генерации ---
-NUM_SAMPLES = 5000               # Сколько объектов создать
-RANDOM_SEED = 42                 # Для воспроизводимости
-np.random.seed(RANDOM_SEED)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
-# --- Списки значений для категориальных признаков ---
-SECTORS = ['Энергетика', 'Транспорт', 'Связь', 'Здравоохранение', 'Банковская сфера', 
-           'Оборонная промышленность', 'Государственное управление', 'Наука', 'Топливная промышленность']
-LEVELS = ['Федеральный', 'Региональный', 'Муниципальный', 'Объектовый']
-SERVICE_SCALES = ['Вся страна', 'Федеральный округ', 'Субъект РФ', 'Несколько муниципалитетов', 'Один город']
-PROCESS_CRITICALITIES = ['Критическая', 'Высокая', 'Средняя', 'Низкая']
+from kii_methodology import (  # noqa: E402
+    CRITERIA,
+    OBJECT_TYPES,
+    OWNERSHIP_LEVELS,
+    SECTOR_LABELS,
+    SERVICE_SCALES,
+    criterion_applicable_field,
+    criterion_level_field,
+    derive_category_level,
+    methodology_score,
+)
 
-# --- Вспомогательные функции ---
-def generate_object_name(i):
-    prefixes = ['АСУ ТП', 'ИС', 'Платформа', 'Система', 'Сеть', 'Портал', 'Сервис']
-    types = ['управления', 'мониторинга', 'обработки', 'передачи', 'хранения', 'аналитики']
-    return f"{np.random.choice(prefixes)} {np.random.choice(types)} #{i+1}"
+NUM_SAMPLES = int(os.getenv("NUM_SAMPLES", "6000"))
+RANDOM_SEED = int(os.getenv("RANDOM_SEED", "42"))
+OUTPUT_PATH = Path(os.getenv("OUTPUT_PATH", Path(__file__).with_name("synthetic_kii_data.csv")))
 
-# Генерация числовых параметров с правдоподобными зависимостями
-def generate_numeric_features(level_idx, sector_idx, criticality_idx, service_scale_idx):
-    # level_idx: 0-Федеральный, 1-Региональный, 2-Муниципальный, 3-Объектовый
-    # Чем выше уровень (меньше индекс), тем больше значения
-    base_multiplier = max(4 - level_idx, 1)  # 4,3,2,1
-    
-    # Количество пользователей
-    if level_idx == 0:
-        num_users = int(np.random.triangular(50000, 200000, 2000000))
-    elif level_idx == 1:
-        num_users = int(np.random.triangular(5000, 50000, 500000))
-    elif level_idx == 2:
-        num_users = int(np.random.triangular(100, 5000, 100000))
-    else:
-        num_users = int(np.random.triangular(10, 500, 5000))
+rng = np.random.default_rng(RANDOM_SEED)
 
-    # Количество территорий
-    if service_scale_idx == 0:  # Вся страна
-        num_territories = np.random.randint(50, 89)
-    elif service_scale_idx == 1:  # Федеральный округ
-        num_territories = np.random.randint(10, 30)
-    elif service_scale_idx == 2:  # Субъект РФ
-        num_territories = np.random.randint(1, 10)
-    else:
-        num_territories = np.random.randint(1, 5)
+SECTOR_WEIGHTS = np.array([0.11, 0.08, 0.09, 0.11, 0.09, 0.04, 0.09, 0.08, 0.04, 0.08, 0.04, 0.05, 0.05, 0.05])
 
-    # Финансовый ущерб (в рублях)
-    if criticality_idx <= 1:  # Критическая/Высокая
-        predicted_financial_damage = int(np.random.lognormal(mean=18, sigma=1.5))  # ~ сотни млн
-    elif criticality_idx == 2:
-        predicted_financial_damage = int(np.random.lognormal(mean=15, sigma=1.2))
-    else:
-        predicted_financial_damage = int(np.random.lognormal(mean=12, sigma=1.0))
+CRITERION_PROFILES = {
+    "life_health": {"base_app": 0.03, "base_severity": 0.20, "sector_boosts": {"health": 0.75, "transport": 0.45, "energy": 0.30, "fuel_energy": 0.35, "nuclear": 0.75, "chemistry": 0.45}},
+    "life_support": {"base_app": 0.10, "base_severity": 0.18, "sector_boosts": {"energy": 0.45, "communications": 0.35, "real_estate": 0.28, "transport": 0.30, "fuel_energy": 0.35}},
+    "transport": {"base_app": 0.01, "base_severity": 0.20, "sector_boosts": {"transport": 0.90}},
+    "communications": {"base_app": 0.02, "base_severity": 0.22, "sector_boosts": {"communications": 0.92}},
+    "government_service": {"base_app": 0.08, "base_severity": 0.18, "sector_boosts": {"real_estate": 0.60, "communications": 0.18, "science": 0.10}},
+    "government_function": {"base_app": 0.08, "base_severity": 0.22, "sector_boosts": {"real_estate": 0.55, "communications": 0.16, "science": 0.10}},
+    "international_treaty": {"base_app": 0.02, "base_severity": 0.12, "sector_boosts": {"real_estate": 0.12, "defense": 0.28, "space": 0.18}},
+    "entity_income_loss": {"base_app": 0.05, "base_severity": 0.18, "sector_boosts": {"finance": 0.32, "energy": 0.32, "fuel_energy": 0.38, "nuclear": 0.28, "defense": 0.26, "space": 0.24, "mining": 0.35, "metallurgy": 0.35, "chemistry": 0.35}},
+    "federal_budget_loss": {"base_app": 0.03, "base_severity": 0.18, "sector_boosts": {"finance": 0.25, "energy": 0.25, "fuel_energy": 0.25, "mining": 0.22, "metallurgy": 0.22, "chemistry": 0.22}},
+    "financial_market": {"base_app": 0.01, "base_severity": 0.22, "sector_boosts": {"finance": 0.94}},
+    "environment": {"base_app": 0.02, "base_severity": 0.22, "sector_boosts": {"energy": 0.35, "fuel_energy": 0.55, "nuclear": 0.82, "mining": 0.52, "metallurgy": 0.42, "chemistry": 0.68}},
+    "control_center": {"base_app": 0.04, "base_severity": 0.20, "sector_boosts": {"real_estate": 0.16, "transport": 0.35, "communications": 0.28, "energy": 0.34, "defense": 0.45, "space": 0.40}},
+    "defense_order": {"base_app": 0.01, "base_severity": 0.20, "sector_boosts": {"defense": 0.92, "space": 0.35}},
+    "defense_security_system": {"base_app": 0.02, "base_severity": 0.22, "sector_boosts": {"defense": 0.94, "real_estate": 0.10, "communications": 0.28, "space": 0.32}},
+}
 
-    # Время восстановления (часы)
-    if criticality_idx == 0:
-        recovery_time = np.random.choice([0.5, 1, 2, 4])
-    elif criticality_idx == 1:
-        recovery_time = np.random.choice([4, 8, 12, 24])
-    else:
-        recovery_time = np.random.choice([24, 48, 72, 168])
 
-    # Количество критичных процессов
-    critical_processes_count = max(1, int(np.random.normal(loc=base_multiplier*3, scale=base_multiplier)))
-    
-    # Количество интеграций
-    integrations_count = max(1, int(np.random.normal(loc=base_multiplier*5, scale=base_multiplier*2)))
-    
-    # Субъекты персональных данных
-    personal_data_subjects = int(num_users * np.random.uniform(0.1, 1.5))
-    
-    # Затронутые сотрудники
-    affected_employees = int(np.random.triangular(10, 100, 5000) * (base_multiplier/3))
-    
-    return (num_users, num_territories, predicted_financial_damage, recovery_time,
-            critical_processes_count, integrations_count, personal_data_subjects, affected_employees)
+def generate_object_name(index: int, sectors: list[str]) -> str:
+    prefixes = ["ИС", "АСУ", "Контур", "Платформа", "Сервис", "Подсистема"]
+    sector_label = SECTOR_LABELS[sectors[0]]
+    return f"{rng.choice(prefixes)} {sector_label} #{index + 1}"
 
-# Генерация логических флагов с зависимостями
-def generate_boolean_flags(sector, level_idx, criticality):
-    # Оборонка и связь чаще имеют defense_impact и sensitive_info
-    defense_impact = False
-    if sector in ['Оборонная промышленность', 'Государственное управление']:
-        defense_impact = np.random.choice([True, True, True, False])  # 75% True
-    elif level_idx == 0 and criticality == 'Критическая':
-        defense_impact = np.random.choice([True, False])
-    
-    # Непрерывный режим
-    continuous_operation = criticality in ['Критическая', 'Высокая'] or np.random.rand() < 0.3
-    
-    # АСУ ТП
-    uses_automated_control_system = sector in ['Энергетика', 'Транспорт', 'Топливная промышленность'] or np.random.rand() < 0.2
-    
-    # Госуслуги
-    provides_gov_services = sector == 'Государственное управление' or np.random.rand() < 0.1
-    
-    # Жизнь и здоровье
-    life_health_impact = sector in ['Здравоохранение', 'Транспорт'] or (criticality == 'Критическая' and np.random.rand() < 0.7)
-    
-    # Экология
-    ecological_impact = sector in ['Энергетика', 'Топливная промышленность'] or np.random.rand() < 0.1
-    
-    # Общественный порядок
-    public_order_impact = sector in ['Государственное управление', 'Транспорт'] or np.random.rand() < 0.15
-    
-    # Транспорт
-    transport_impact = sector == 'Транспорт' or np.random.rand() < 0.1
-    
-    # Связь
-    communication_impact = sector == 'Связь' or np.random.rand() < 0.1
-    
-    # Чувствительная информация
-    sensitive_info = (defense_impact or provides_gov_services or sector in ['Оборонная промышленность', 'Банковская сфера']) and np.random.rand() < 0.9
-    
-    return (continuous_operation, uses_automated_control_system, provides_gov_services,
-            life_health_impact, ecological_impact, defense_impact, public_order_impact,
-            transport_impact, communication_impact, sensitive_info)
 
-# --- Эвристический расчет категории (аналогично вашему API) ---
-def calculate_category(row):
-    # Упрощенная балльная система, отражающая логику Постановления №4
-    score = 0.0
-    # Социальный ущерб
-    if row['life_health_impact']: score += 25
-    if row['num_users'] > 1000000: score += 20
-    elif row['num_users'] > 100000: score += 10
-    elif row['num_users'] > 10000: score += 5
-    if row['personal_data_subjects'] > 500000: score += 10
-    elif row['personal_data_subjects'] > 100000: score += 5
-    if row['num_territories'] > 20: score += 10
-    elif row['num_territories'] > 5: score += 5
-    
-    # Экономический ущерб
-    if row['predicted_financial_damage'] > 500_000_000: score += 25
-    elif row['predicted_financial_damage'] > 100_000_000: score += 15
-    elif row['predicted_financial_damage'] > 10_000_000: score += 5
-    if row['recovery_time_hours'] <= 4: score += 15
-    elif row['recovery_time_hours'] <= 24: score += 5
-    if row['continuous_operation']: score += 5
-    
-    # Ущерб для обороны и безопасности
-    if row['defense_impact']: score += 20
-    if row['sensitive_info']: score += 10
-    if row['public_order_impact']: score += 5
-    if row['provides_gov_services']: score += 10
-    
-    # Отраслевые и технологические факторы
-    if row['uses_automated_control_system']: score += 10
-    if row['level'] == 'Федеральный': score += 10
-    elif row['level'] == 'Региональный': score += 5
-    if row['critical_processes_count'] > 5: score += 5
-    if row['integrations_count'] > 10: score += 5
-    
-    # Определение категории по баллам (шкала соответствует значимости)
-    if score >= 70:
-        return 3  # Первая
-    elif score >= 45:
-        return 2  # Вторая
-    elif score >= 20:
-        return 1  # Третья
-    else:
-        return 0  # Без категории
+def choose_sectors() -> list[str]:
+    count = int(rng.choice([1, 2, 3], p=[0.72, 0.22, 0.06]))
+    choices = rng.choice(list(SECTOR_LABELS.keys()), size=count, replace=False, p=SECTOR_WEIGHTS / SECTOR_WEIGHTS.sum())
+    return list(choices)
 
-# --- Основной цикл генерации ---
-data = []
-for i in range(NUM_SAMPLES):
-    object_name = generate_object_name(i)
-    sector = np.random.choice(SECTORS)
-    level = np.random.choice(LEVELS, p=[0.15, 0.35, 0.25, 0.25])  # Распределение уровней
-    service_scale = np.random.choice(SERVICE_SCALES)
-    process_criticality = np.random.choice(PROCESS_CRITICALITIES, p=[0.1, 0.3, 0.4, 0.2])
-    
-    # Индексы для вспомогательных функций
-    sector_idx = SECTORS.index(sector)
-    level_idx = LEVELS.index(level)
-    criticality_idx = PROCESS_CRITICALITIES.index(process_criticality)
-    scale_idx = SERVICE_SCALES.index(service_scale)
-    
-    # Числовые признаки
-    num_users, num_territories, fin_damage, rec_time, crit_proc, integr, pers_data, aff_emp = \
-        generate_numeric_features(level_idx, sector_idx, criticality_idx, scale_idx)
-    
-    # Булевы признаки
-    (continuous_op, uses_asu, gov_services, life_health, eco, defense, pub_order,
-     transport, comm, sensitive) = generate_boolean_flags(sector, level_idx, process_criticality)
-    
+
+def severity_seed(sectors: list[str], process_criticality: int, service_scale: str, ownership_level: str) -> float:
+    scale_factor = {"local": 0.05, "regional": 0.12, "federal": 0.22, "intersectoral": 0.28}[service_scale]
+    ownership_factor = {"private": 0.02, "municipal": 0.06, "regional": 0.10, "federal": 0.16}[ownership_level]
+    sector_factor = 0.03 * len(sectors)
+    return min(0.15 + process_criticality / 20.0 + scale_factor + ownership_factor + sector_factor, 0.95)
+
+
+def sample_level(applicable: bool, severity: float) -> int:
+    if not applicable:
+        return 0
+
+    severity = min(max(severity, 0.0), 1.0)
+    p0 = max(0.05, 0.52 - severity * 0.34)
+    p1 = max(0.12, 0.24 - severity * 0.02)
+    p2 = max(0.08, 0.16 + severity * 0.10)
+    p3 = max(0.02, 1.0 - (p0 + p1 + p2))
+    probs = np.array([p0, p1, p2, p3], dtype=np.float64)
+    probs /= probs.sum()
+    return int(rng.choice([0, 1, 2, 3], p=probs))
+
+
+def assess_criterion(criterion_id: str, sectors: list[str], base_severity: float, object_type: str, scada_used: bool) -> tuple[bool, int]:
+    profile = CRITERION_PROFILES[criterion_id]
+    sector_boost = max((profile["sector_boosts"].get(sector, 0.0) for sector in sectors), default=0.0)
+    app_chance = profile["base_app"] + sector_boost
+
+    if object_type == "process_control_system" and criterion_id in {"life_health", "life_support", "environment", "control_center"}:
+        app_chance += 0.08
+    if object_type == "telecom_network" and criterion_id in {"communications", "life_support"}:
+        app_chance += 0.12
+    if scada_used and criterion_id in {"life_health", "environment", "control_center"}:
+        app_chance += 0.08
+    if criterion_id in {"government_service", "government_function", "international_treaty"} and "real_estate" in sectors:
+        app_chance += 0.10
+
+    applicable = bool(rng.random() < min(app_chance, 0.98))
+    level = sample_level(applicable, base_severity + profile["base_severity"] + sector_boost)
+    return applicable, level
+
+
+def generate_record(index: int) -> dict:
+    sectors = choose_sectors()
+    ownership_level = str(rng.choice(OWNERSHIP_LEVELS, p=[0.20, 0.32, 0.24, 0.24]))
+    service_scale = str(rng.choice(SERVICE_SCALES, p=[0.34, 0.30, 0.24, 0.12]))
+    object_type = str(rng.choice(OBJECT_TYPES, p=[0.58, 0.20, 0.22]))
+    process_criticality = int(rng.choice(np.arange(1, 11), p=np.array([0.03, 0.05, 0.08, 0.10, 0.15, 0.16, 0.15, 0.12, 0.10, 0.06])))
+    critical_process_count = int(rng.integers(1, 4 + process_criticality))
+    interaction_count = int(rng.integers(2, 18 + process_criticality * 5))
+    continuous_operation = bool(rng.random() < (0.25 + process_criticality / 15.0))
+    scada_used = object_type == "process_control_system" or bool(rng.random() < 0.14)
+    classified_info = "defense" in sectors or bool(rng.random() < 0.18)
+    base = severity_seed(sectors, process_criticality, service_scale, ownership_level)
+
     row = {
-        'object_name': object_name,
-        'sector': sector,
-        'level': level,
-        'service_scale': service_scale,
-        'process_criticality': process_criticality,
-        'num_users': num_users,
-        'num_territories': num_territories,
-        'predicted_financial_damage': fin_damage,
-        'recovery_time_hours': rec_time,
-        'critical_processes_count': crit_proc,
-        'integrations_count': integr,
-        'personal_data_subjects': pers_data,
-        'affected_employees': aff_emp,
-        'continuous_operation': continuous_op,
-        'uses_automated_control_system': uses_asu,
-        'provides_gov_services': gov_services,
-        'life_health_impact': life_health,
-        'ecological_impact': eco,
-        'defense_impact': defense,
-        'public_order_impact': pub_order,
-        'transport_impact': transport,
-        'communication_impact': comm,
-        'sensitive_info': sensitive
+        "object_name": generate_object_name(index, sectors),
+        "sectors": "|".join(sectors),
+        "ownership_level": ownership_level,
+        "service_scale": service_scale,
+        "object_type": object_type,
+        "process_criticality": process_criticality,
+        "critical_process_count": critical_process_count,
+        "interaction_count": interaction_count,
+        "continuous_operation": continuous_operation,
+        "scada_used": scada_used,
+        "classified_info": classified_info,
     }
-    # Целевая метка
-    row['category_level'] = calculate_category(row)
-    data.append(row)
 
-# --- Сохранение ---
-df = pd.DataFrame(data)
-df.to_csv('synthetic_kii_data.csv', index=False, encoding='utf-8-sig')
-print(f"Сгенерирован датасет из {NUM_SAMPLES} записей. Распределение по категориям:")
-print(df['category_level'].value_counts().sort_index())
+    for criterion in CRITERIA:
+        applicable, level = assess_criterion(criterion["id"], sectors, base, object_type, scada_used)
+        row[criterion_applicable_field(criterion["id"])] = applicable
+        row[criterion_level_field(criterion["id"])] = level
+
+    row["category_level"] = derive_category_level(row)
+    row["significance_score"] = methodology_score(row)
+    return row
+
+
+def main() -> None:
+    data = [generate_record(index) for index in range(NUM_SAMPLES)]
+    df = pd.DataFrame(data)
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
+
+    print(f"Сгенерирован датасет: {OUTPUT_PATH}")
+    print(f"Количество записей: {len(df)}")
+    print("Распределение по категориям:")
+    print(df["category_level"].value_counts().sort_index())
+
+
+if __name__ == "__main__":
+    main()

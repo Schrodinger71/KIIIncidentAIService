@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -8,40 +9,28 @@ import pandas as pd
 import requests
 import streamlit as st
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from kii_methodology import (  # noqa: E402
+    CATEGORY_MAP,
+    CRITERIA,
+    OBJECT_TYPE_LABELS,
+    OWNERSHIP_LABELS,
+    RECOMMENDATIONS,
+    SECTOR_LABELS,
+    SERVICE_SCALE_LABELS,
+    criterion_applicable_field,
+    criterion_level_field,
+    sectors_to_text,
+)
+
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 DATA_FILE = Path(os.getenv("DATA_FILE", "data/objects.json"))
 
-SECTOR_LABELS = {
-    "energy": "Энергетика",
-    "health": "Здравоохранение",
-    "finance": "Финансы",
-    "transport": "Транспорт",
-    "government": "Госорганы",
-    "communications": "Связь",
-    "industry": "Промышленность",
-}
-
-OWNERSHIP_LABELS = {
-    "federal": "Федеральный",
-    "regional": "Региональный",
-    "municipal": "Муниципальный",
-    "private": "Частный",
-}
-
-SCALE_LABELS = {
-    "local": "Локальный",
-    "regional": "Региональный",
-    "federal": "Федеральный",
-    "intersectoral": "Межотраслевой",
-}
-
-CATEGORY_ORDER = [
-    "Без категории",
-    "Третья категория",
-    "Вторая категория",
-    "Первая категория",
-]
+CATEGORY_ORDER = [CATEGORY_MAP[index] for index in range(4)]
 
 
 def ensure_data_file() -> None:
@@ -105,7 +94,7 @@ def objects_frame(items: list[dict]) -> pd.DataFrame:
             columns=[
                 "id",
                 "object_name",
-                "sector",
+                "sectors",
                 "ownership_level",
                 "service_scale",
                 "predicted_category",
@@ -115,28 +104,54 @@ def objects_frame(items: list[dict]) -> pd.DataFrame:
         )
 
     frame = pd.DataFrame(items).copy()
-    frame["sector"] = frame["sector"].map(SECTOR_LABELS).fillna(frame["sector"])
+    if "sectors" not in frame.columns and "sector" in frame.columns:
+        frame["sectors"] = frame["sector"]
+    if "sectors" not in frame.columns:
+        frame["sectors"] = "-"
+    if "ownership_level" not in frame.columns:
+        frame["ownership_level"] = "-"
+    if "service_scale" not in frame.columns:
+        frame["service_scale"] = "-"
+    if "predicted_category" not in frame.columns:
+        frame["predicted_category"] = "-"
+    if "significance_score" not in frame.columns:
+        frame["significance_score"] = 0
+    if "confidence" not in frame.columns:
+        frame["confidence"] = 0.0
+    if "created_at" not in frame.columns:
+        frame["created_at"] = pd.NaT
+    frame["sectors"] = frame["sectors"].apply(sectors_to_text)
     frame["ownership_level"] = frame["ownership_level"].map(OWNERSHIP_LABELS).fillna(frame["ownership_level"])
-    frame["service_scale"] = frame["service_scale"].map(SCALE_LABELS).fillna(frame["service_scale"])
+    frame["service_scale"] = frame["service_scale"].map(SERVICE_SCALE_LABELS).fillna(frame["service_scale"])
     frame["created_at"] = pd.to_datetime(frame["created_at"], errors="coerce")
     return frame
 
 
 def registry_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    if frame.empty:
-        return frame
-
     registry = frame.copy()
+    for column, default in {
+        "id": "-",
+        "object_name": "-",
+        "sectors": "-",
+        "ownership_level": "-",
+        "service_scale": "-",
+        "process_criticality": 0,
+        "significance_score": 0,
+        "predicted_category": "-",
+        "confidence": 0.0,
+        "created_at": pd.NaT,
+    }.items():
+        if column not in registry.columns:
+            registry[column] = default
     registry["created_at"] = registry["created_at"].dt.strftime("%Y-%m-%d %H:%M")
     registry = registry.rename(
         columns={
             "id": "ID",
             "object_name": "Объект КИИ",
-            "sector": "Сектор",
+            "sectors": "Сферы",
             "ownership_level": "Уровень",
             "service_scale": "Масштаб",
             "process_criticality": "Критичность",
-            "supported_users": "Пользователи",
             "significance_score": "Score",
             "predicted_category": "Категория",
             "confidence": "Уверенность",
@@ -146,11 +161,10 @@ def registry_frame(frame: pd.DataFrame) -> pd.DataFrame:
     columns = [
         "ID",
         "Объект КИИ",
-        "Сектор",
+        "Сферы",
         "Уровень",
         "Масштаб",
         "Критичность",
-        "Пользователи",
         "Score",
         "Категория",
         "Уверенность",
@@ -549,8 +563,8 @@ def render_header(api_ok: bool, api_status: dict, total_objects: int) -> None:
                 <div class="eyebrow">DEVOPS + DOCKER PERSONAL + STREAMLIT</div>
                 <h1>Определение категории значимости объекта КИИ</h1>
                 <p>
-                    Приложение определяет категорию значимости объекта КИИ по набору из 15+
-                    характеристик и показывает вклад эвристики и ИИ-модели в итоговый результат.
+                    Приложение определяет категорию значимости объекта КИИ по показателям
+                    методики 8.3.1-8.3.14 и показывает методический результат вместе с вкладом ИИ-модели.
                 </p>
             </div>
             <div class="hero-side">
@@ -629,10 +643,10 @@ def main() -> None:
         st.divider()
         st.subheader("Фильтры реестра")
         category_options = sorted(ui_frame["predicted_category"].dropna().unique().tolist()) if not ui_frame.empty else []
-        sector_options = sorted(ui_frame["sector"].dropna().unique().tolist()) if not ui_frame.empty else []
+        sector_options = sorted(ui_frame["sectors"].dropna().unique().tolist()) if not ui_frame.empty else []
         owner_options = sorted(ui_frame["ownership_level"].dropna().unique().tolist()) if not ui_frame.empty else []
         filter_category = st.multiselect("Категория", category_options)
-        filter_sector = st.multiselect("Сектор", sector_options)
+        filter_sector = st.multiselect("Сфера", sector_options)
         filter_owner = st.multiselect("Уровень", owner_options)
 
     metric_cols = st.columns(4)
@@ -654,7 +668,7 @@ def main() -> None:
                 st.info("Пока нет записей в реестре.")
             else:
                 st.dataframe(
-                    latest_frame[["ID", "Объект КИИ", "Сектор", "Категория", "Score", "Создан"]].head(8),
+                    latest_frame[["ID", "Объект КИИ", "Сферы", "Категория", "Score", "Создан"]].head(8),
                     width="stretch",
                     hide_index=True,
                     height=360,
@@ -682,14 +696,14 @@ def main() -> None:
             st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-            st.subheader("Распределение по секторам")
-            if not ui_frame.empty and "sector" in ui_frame:
+            st.subheader("Распределение по сферам")
+            if not ui_frame.empty and "sectors" in ui_frame:
                 sector_counts = (
-                    ui_frame["sector"]
+                    ui_frame["sectors"]
                     .value_counts()
-                    .rename_axis("Сектор")
+                    .rename_axis("Сферы")
                     .reset_index(name="Количество")
-                    .set_index("Сектор")
+                    .set_index("Сферы")
                 )
                 st.bar_chart(sector_counts, height=260)
             else:
@@ -707,12 +721,13 @@ def main() -> None:
                 c1, c2, c3 = st.columns(3)
                 object_name = c1.text_input("Наименование объекта", "Региональный диспетчерский центр")
                 field_hint(c1, "Полное наименование объекта КИИ для расчёта категории.")
-                sector = c2.selectbox(
-                    "Сектор КИИ",
+                sectors = c2.multiselect(
+                    "Сферы деятельности",
                     list(SECTOR_LABELS.keys()),
+                    default=["communications"],
                     format_func=SECTOR_LABELS.get,
                 )
-                field_hint(c2, "Отрасль, к которой относится объект КИИ.")
+                field_hint(c2, "Выберите одну или несколько сфер из 14 сфер КИИ по 187-ФЗ.")
                 ownership_level = c3.selectbox(
                     "Уровень объекта",
                     list(OWNERSHIP_LABELS.keys()),
@@ -723,8 +738,8 @@ def main() -> None:
                 c4, c5, c6 = st.columns(3)
                 service_scale = c4.selectbox(
                     "Масштаб услуг",
-                    list(SCALE_LABELS.keys()),
-                    format_func=SCALE_LABELS.get,
+                    list(SERVICE_SCALE_LABELS.keys()),
+                    format_func=SERVICE_SCALE_LABELS.get,
                 )
                 field_hint(c4, "Уровень оказания услуг: локальный, региональный, федеральный или межотраслевой.")
                 process_criticality = c5.slider(
@@ -734,97 +749,71 @@ def main() -> None:
                     7,
                 )
                 field_hint(c5, "Экспертная оценка критичности поддерживаемого процесса.")
-                territories_count = c6.number_input(
-                    "Количество территорий",
-                    min_value=1,
-                    value=3,
-                    step=1,
+                object_type = c6.selectbox(
+                    "Тип объекта",
+                    list(OBJECT_TYPE_LABELS.keys()),
+                    format_func=OBJECT_TYPE_LABELS.get,
+                    index=0,
                 )
-                field_hint(c6, "Сколько территорий или площадок затронет отказ объекта.")
+                field_hint(c6, "Информационная система, сеть или АСУ/технологический контур.")
 
                 c7, c8, c9 = st.columns(3)
-                supported_users = c7.number_input(
-                    "Количество пользователей",
-                    min_value=0,
-                    value=250000,
-                    step=1000,
-                )
-                field_hint(c7, "Сколько пользователей, клиентов или потребителей зависит от объекта.")
-                annual_financial_loss_million = c8.number_input(
-                    "Потери, млн руб.",
-                    min_value=0.0,
-                    value=150.0,
-                    step=10.0,
-                )
-                field_hint(c8, "Оценка финансового ущерба при отказе объекта.")
-                recovery_time_hours = c9.number_input(
-                    "Восстановление, ч",
-                    min_value=0,
-                    value=12,
-                    step=1,
-                )
-                field_hint(c9, "Время восстановления нормальной работы после отказа.")
-
-                c10, c11, c12 = st.columns(3)
-                critical_processes = c10.number_input(
+                critical_process_count = c7.number_input(
                     "Критичных процессов",
                     min_value=0,
                     value=4,
                     step=1,
                 )
-                field_hint(c10, "Сколько критичных процессов зависит от объекта.")
-                interactions_count = c11.number_input(
+                field_hint(c7, "Сколько критичных процессов зависит от объекта.")
+                interaction_count = c8.number_input(
                     "Интеграций и связей",
                     min_value=0,
                     value=15,
                     step=1,
                 )
-                field_hint(c11, "Количество связанных внутренних и внешних систем.")
-                personal_data_subjects = c12.number_input(
-                    "Субъектов ПДн",
-                    min_value=0,
-                    value=50000,
-                    step=1000,
-                )
-                field_hint(c12, "Сколько субъектов персональных данных затрагивает объект.")
-
-                employees_affected = st.number_input(
-                    "Персонал под влиянием отказа",
-                    min_value=0,
-                    value=1500,
-                    step=10,
-                )
-                st.caption("Сколько сотрудников потеряют доступ к критичным функциям при отказе объекта.")
-
-                st.markdown("**Признаки значимости объекта**")
-                b1, b2, b3, b4 = st.columns(4)
-                continuous_operation = b1.checkbox(
+                field_hint(c8, "Количество внешних и внутренних зависимостей объекта.")
+                continuous_operation = c9.checkbox(
                     "Непрерывный режим",
                     value=True,
                 )
-                field_hint(b1, "Объект должен работать в режиме 24/7 без длительных остановок.")
-                scada_used = b2.checkbox("Используется АСУ ТП")
-                field_hint(b2, "Объект связан с АСУ ТП или технологическим контуром.")
-                government_services = b3.checkbox("Оказывает госуслуги")
-                field_hint(b3, "Объект участвует в оказании государственных или муниципальных услуг.")
-                life_safety_impact = b4.checkbox("Влияние на жизнь и здоровье")
-                field_hint(b4, "Отказ объекта влияет на жизнь и здоровье людей.")
+                field_hint(c9, "Объект должен работать без длительных остановок.")
 
-                b5, b6, b7, b8 = st.columns(4)
-                ecological_impact = b5.checkbox("Экологические последствия")
-                field_hint(b5, "Нарушение работы объекта может вызвать экологический ущерб.")
-                defense_impact = b6.checkbox("Влияние на оборону")
-                field_hint(b6, "Объект влияет на оборону или безопасность государства.")
-                public_order_impact = b7.checkbox("Влияние на общественный порядок")
-                field_hint(b7, "Отказ объекта может нарушить общественный порядок.")
-                transport_disruption = b8.checkbox("Нарушение транспорта")
-                field_hint(b8, "Отказ объекта способен нарушить транспортную инфраструктуру.")
+                b1, b2 = st.columns(2)
+                scada_used = b1.checkbox("Используется АСУ ТП", value=False)
+                field_hint(b1, "Отметьте, если объект связан с технологическим контуром или АСУ.")
+                classified_info = b2.checkbox("Есть чувствительная информация", value=False)
+                field_hint(b2, "Отметьте, если объект обрабатывает чувствительные или ограниченные данные.")
 
-                b9, b10 = st.columns(2)
-                communications_disruption = b9.checkbox("Нарушение связи")
-                field_hint(b9, "Нарушение работы объекта влияет на связь или обмен данными.")
-                classified_info = b10.checkbox("Обрабатывается чувствительная информация")
-                field_hint(b10, "Объект обрабатывает чувствительные, ограниченные или критичные данные.")
+                st.markdown("**Показатели методики 8.3.1-8.3.14**")
+                st.caption(
+                    "Для каждого показателя отметьте применимость и укажите уже рассчитанный уровень: "
+                    "0 - ниже порога, 1 - третья категория, 2 - вторая, 3 - первая."
+                )
+
+                criterion_inputs: dict[str, tuple[bool, int]] = {}
+                level_labels = {
+                    0: "0 - ниже порога / без категории",
+                    1: "1 - третья категория",
+                    2: "2 - вторая категория",
+                    3: "3 - первая категория",
+                }
+                for criterion in CRITERIA:
+                    st.markdown(f"**{criterion['code']} {criterion['title']}**")
+                    col_a, col_b = st.columns([1, 2])
+                    applicable = col_a.checkbox(
+                        "Применимо",
+                        value=False,
+                        key=f"{criterion['id']}_applicable_ui",
+                    )
+                    field_hint(col_a, criterion["hint"])
+                    level = col_b.selectbox(
+                        "Уровень показателя",
+                        options=[0, 1, 2, 3],
+                        index=0,
+                        format_func=lambda item, mapping=level_labels: mapping[item],
+                        key=f"{criterion['id']}_level_ui",
+                    )
+                    criterion_inputs[criterion["id"]] = (applicable, int(level))
 
                 submitted = st.form_submit_button(
                     "Отправить ИИ-агенту",
@@ -832,31 +821,27 @@ def main() -> None:
                 )
 
                 if submitted:
+                    if not sectors:
+                        st.error("Выберите хотя бы одну сферу деятельности объекта.")
+                        st.stop()
+
                     payload = {
                         "object_name": object_name,
-                        "sector": sector,
+                        "sectors": sectors,
                         "ownership_level": ownership_level,
                         "service_scale": service_scale,
+                        "object_type": object_type,
                         "process_criticality": int(process_criticality),
-                        "supported_users": int(supported_users),
-                        "territories_count": int(territories_count),
-                        "annual_financial_loss_million": float(annual_financial_loss_million),
-                        "recovery_time_hours": int(recovery_time_hours),
-                        "critical_processes": int(critical_processes),
-                        "interactions_count": int(interactions_count),
-                        "personal_data_subjects": int(personal_data_subjects),
-                        "employees_affected": int(employees_affected),
+                        "critical_process_count": int(critical_process_count),
+                        "interaction_count": int(interaction_count),
                         "continuous_operation": continuous_operation,
                         "scada_used": scada_used,
-                        "government_services": government_services,
-                        "life_safety_impact": life_safety_impact,
-                        "ecological_impact": ecological_impact,
-                        "defense_impact": defense_impact,
-                        "public_order_impact": public_order_impact,
-                        "transport_disruption": transport_disruption,
-                        "communications_disruption": communications_disruption,
                         "classified_info": classified_info,
                     }
+                    for criterion in CRITERIA:
+                        applicable, level = criterion_inputs[criterion["id"]]
+                        payload[criterion_applicable_field(criterion["id"])] = applicable
+                        payload[criterion_level_field(criterion["id"])] = level
 
                     prediction = predict_object(payload)
                     if prediction is None:
@@ -883,7 +868,7 @@ def main() -> None:
             st.subheader("Последняя AI-оценка")
             last_prediction = st.session_state.get("last_prediction")
             if not last_prediction:
-                st.info("После расчета здесь появятся категория, score, причины и вклад модели.")
+                st.info("После расчета здесь появятся категория, методическое обоснование и вклад модели.")
             else:
                 top1, top2 = st.columns(2)
                 top1.metric("Score", int(last_prediction.get("significance_score", 0)))
@@ -896,6 +881,12 @@ def main() -> None:
                 st.write("**Ключевые факторы**")
                 for item in last_prediction.get("key_factors", []):
                     st.markdown(f"- {item}")
+                st.write("**Показатели 8.3.*:**")
+                for item in last_prediction.get("criterion_assessments", []):
+                    mark = "применим" if item.get("applicable") else "неприменим"
+                    st.markdown(
+                        f"- {item.get('code')} {item.get('title')}: {item.get('category_name')} ({mark})"
+                    )
                 st.write("**Рекомендации**")
                 for item in last_prediction.get("recommendations", []):
                     st.markdown(f"- {item}")
@@ -904,9 +895,9 @@ def main() -> None:
                     st.markdown(
                         """
                         <div class="ai-note">
-                            Эвристика определяет базовую категорию значимости по последствиям,
-                            а нейросеть добавляет второй сигнал. Итоговая категория берется из
-                            объединенного результата.
+                            Итоговая категория определяется по методике как максимум из применимых
+                            показателей 8.3.1-8.3.14. Модель используется как дополнительный
+                            классификатор и источник confidence, но не подменяет правило методики.
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -962,7 +953,7 @@ def main() -> None:
         if filter_category:
             filtered = filtered[filtered["predicted_category"].isin(filter_category)]
         if filter_sector:
-            filtered = filtered[filtered["sector"].isin(filter_sector)]
+            filtered = filtered[filtered["sectors"].isin(filter_sector)]
         if filter_owner:
             filtered = filtered[filtered["ownership_level"].isin(filter_owner)]
 
@@ -978,7 +969,7 @@ def main() -> None:
                 column_config={
                     "Объект КИИ": st.column_config.TextColumn(width="large"),
                     "Категория": st.column_config.TextColumn(width="medium"),
-                    "Сектор": st.column_config.TextColumn(width="medium"),
+                    "Сферы": st.column_config.TextColumn(width="large"),
                     "Уровень": st.column_config.TextColumn(width="medium"),
                     "Масштаб": st.column_config.TextColumn(width="medium"),
                     "Создан": st.column_config.TextColumn(width="medium"),

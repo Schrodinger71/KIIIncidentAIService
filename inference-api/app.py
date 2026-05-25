@@ -1,5 +1,8 @@
-import os
+from __future__ import annotations
+
 import json
+import os
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -8,8 +11,35 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from kii_methodology import (  # noqa: E402
+    CATEGORY_MAP,
+    CRITERIA,
+    FEATURE_INPUT_DIM,
+    OBJECT_TYPES,
+    OWNERSHIP_LEVELS,
+    RECOMMENDATIONS,
+    SECTORS,
+    SERVICE_SCALES,
+    build_summary,
+    criterion_applicable_field,
+    criterion_level_field,
+    criterion_results,
+    default_record,
+    derive_category_level,
+    feature_vector,
+    heuristic_distribution,
+    key_factors,
+    methodology_score,
+    normalize_record,
+)
+
 try:
     from tensorflow import keras
+
     TENSORFLOW_IMPORT_ERROR = None
 except Exception as exc:
     keras = None
@@ -23,54 +53,15 @@ except Exception:
 
 app = FastAPI(
     title="KII Significance Inference API",
-    version="2.1.0",
-    description="AI service for determining the significance category of a KII object.",
+    version="3.0.0",
+    description=(
+        "AI service for determining the significance category of a KII object "
+        "based on methodology indicators 8.3.1-8.3.14."
+    ),
 )
 
-SECTORS = [
-    "energy",
-    "health",
-    "finance",
-    "transport",
-    "government",
-    "communications",
-    "industry",
-]
-OWNERSHIP_LEVELS = ["federal", "regional", "municipal", "private"]
-SERVICE_SCALES = ["local", "regional", "federal", "intersectoral"]
-
-CATEGORY_MAP = {
-    0: "Без категории",
-    1: "Третья категория",
-    2: "Вторая категория",
-    3: "Первая категория",
-}
-
-RECOMMENDATIONS = {
-    0: [
-        "Оставить объект в реестре наблюдения и проводить периодическую переоценку.",
-        "Уточнить критичность бизнес-процессов и полноту исходных характеристик.",
-        "Подготовить базовый комплект организационных мер без усиленного режима.",
-    ],
-    1: [
-        "Оформить паспорт объекта и закрепить ответственных за его защиту.",
-        "Реализовать базовые меры ИБ и регламент резервного восстановления.",
-        "Проводить регулярную переоценку значимости при изменении характеристик объекта.",
-    ],
-    2: [
-        "Усилить меры защиты, сегментацию и контроль доступа к объекту КИИ.",
-        "Подготовить сценарии отказа и план обеспечения непрерывности процессов.",
-        "Зафиксировать интеграции и критичные зависимости в технологическом контуре.",
-    ],
-    3: [
-        "Применить максимальный приоритет защиты и непрерывности функционирования объекта.",
-        "Подготовить расширенный план реагирования и аварийного восстановления.",
-        "Согласовать регламент контроля с учетом наиболее значимых последствий для КИИ.",
-    ],
-}
-
 MODEL = None
-MODEL_SOURCE = "heuristic_only"
+MODEL_SOURCE = "methodology_only"
 MODEL_LOAD_ERRORS: list[str] = []
 ACTIVE_MODEL_CHOICE = os.getenv("DEFAULT_MODEL_CHOICE", "keras")
 MODEL_USABLE = False
@@ -79,32 +70,58 @@ MODEL_DIAGNOSTIC = "not_loaded"
 
 class KIIObjectPayload(BaseModel):
     object_name: str = Field(..., min_length=3, max_length=200)
-    sector: str
+    sectors: list[str] = Field(default_factory=list)
+    sector: str | None = None
     ownership_level: str
     service_scale: str
-    process_criticality: int = Field(..., ge=1, le=10)
-    supported_users: int = Field(0, ge=0)
-    territories_count: int = Field(1, ge=1)
-    annual_financial_loss_million: float = Field(0, ge=0)
-    recovery_time_hours: int = Field(0, ge=0)
-    critical_processes: int = Field(0, ge=0)
-    interactions_count: int = Field(0, ge=0)
-    personal_data_subjects: int = Field(0, ge=0)
-    employees_affected: int = Field(0, ge=0)
+    object_type: str = "information_system"
+    process_criticality: int = Field(5, ge=1, le=10)
+    critical_process_count: int = Field(0, ge=0)
+    interaction_count: int = Field(0, ge=0)
     continuous_operation: bool = False
     scada_used: bool = False
-    government_services: bool = False
-    life_safety_impact: bool = False
-    ecological_impact: bool = False
-    defense_impact: bool = False
-    public_order_impact: bool = False
-    transport_disruption: bool = False
-    communications_disruption: bool = False
     classified_info: bool = False
+
+    life_health_applicable: bool = False
+    life_health_level: int = Field(0, ge=0, le=3)
+    life_support_applicable: bool = False
+    life_support_level: int = Field(0, ge=0, le=3)
+    transport_applicable: bool = False
+    transport_level: int = Field(0, ge=0, le=3)
+    communications_applicable: bool = False
+    communications_level: int = Field(0, ge=0, le=3)
+    government_service_applicable: bool = False
+    government_service_level: int = Field(0, ge=0, le=3)
+    government_function_applicable: bool = False
+    government_function_level: int = Field(0, ge=0, le=3)
+    international_treaty_applicable: bool = False
+    international_treaty_level: int = Field(0, ge=0, le=3)
+    entity_income_loss_applicable: bool = False
+    entity_income_loss_level: int = Field(0, ge=0, le=3)
+    federal_budget_loss_applicable: bool = False
+    federal_budget_loss_level: int = Field(0, ge=0, le=3)
+    financial_market_applicable: bool = False
+    financial_market_level: int = Field(0, ge=0, le=3)
+    environment_applicable: bool = False
+    environment_level: int = Field(0, ge=0, le=3)
+    control_center_applicable: bool = False
+    control_center_level: int = Field(0, ge=0, le=3)
+    defense_order_applicable: bool = False
+    defense_order_level: int = Field(0, ge=0, le=3)
+    defense_security_system_applicable: bool = False
+    defense_security_system_level: int = Field(0, ge=0, le=3)
 
 
 class ModelSelectionPayload(BaseModel):
     model_choice: str
+
+
+def payload_to_record(payload: KIIObjectPayload) -> dict:
+    if hasattr(payload, "model_dump"):
+        data = payload.model_dump()
+    else:
+        data = payload.dict()
+    return normalize_record(data)
 
 
 def named_probabilities(values: np.ndarray) -> dict[str, float]:
@@ -125,19 +142,27 @@ def configured_model_paths() -> list[Path]:
         "keras": [
             base_dir / "models" / "model.keras",
             Path("/app/models/model.keras"),
+            base_dir / "models" / "model.h5",
+            Path("/app/models/model.h5"),
         ],
         "h5": [
             base_dir / "models" / "model.h5",
             Path("/app/models/model.h5"),
+            base_dir / "models" / "model.keras",
+            Path("/app/models/model.keras"),
         ],
     }
 
     if explicit_model:
         paths.append(Path(explicit_model))
-    elif ACTIVE_MODEL_CHOICE in predefined_models:
+
+    if ACTIVE_MODEL_CHOICE in predefined_models:
         paths.extend(predefined_models[ACTIVE_MODEL_CHOICE])
+        alternate_choice = "h5" if ACTIVE_MODEL_CHOICE == "keras" else "keras"
+        paths.extend(predefined_models[alternate_choice])
     else:
         paths.extend(predefined_models["keras"])
+        paths.extend(predefined_models["h5"])
 
     if allow_fallback and fallback_model:
         fallback_path = Path(fallback_model)
@@ -152,8 +177,57 @@ def configured_model_paths() -> list[Path]:
             continue
         seen.add(key)
         deduplicated_paths.append(path)
-
     return deduplicated_paths
+
+
+def create_inference_model():
+    if keras is None:
+        raise ValueError("tensorflow/keras is unavailable.")
+
+    model = keras.Sequential(
+        [
+            keras.layers.Input(shape=(FEATURE_INPUT_DIM,)),
+            keras.layers.Dense(128, activation="relu"),
+            keras.layers.BatchNormalization(),
+            keras.layers.Dropout(0.2),
+            keras.layers.Dense(64, activation="relu"),
+            keras.layers.BatchNormalization(),
+            keras.layers.Dropout(0.15),
+            keras.layers.Dense(32, activation="relu"),
+            keras.layers.Dense(4, activation="softmax"),
+        ]
+    )
+    model(np.zeros((1, FEATURE_INPUT_DIM), dtype=np.float32))
+    return model
+
+
+def load_weights_only_from_h5(path: Path):
+    model = create_inference_model()
+    model.load_weights(path)
+    return model
+
+
+def load_weights_only_from_keras_archive(path: Path):
+    if not zipfile.is_zipfile(path):
+        raise ValueError("File is not a valid .keras archive.")
+
+    with zipfile.ZipFile(path, "r") as archive:
+        if "model.weights.h5" not in set(archive.namelist()):
+            raise ValueError("The .keras archive does not contain model.weights.h5.")
+
+        with tempfile.NamedTemporaryFile(suffix=".weights.h5", delete=False) as tmp:
+            tmp.write(archive.read("model.weights.h5"))
+            tmp_path = tmp.name
+
+    try:
+        model = create_inference_model()
+        model.load_weights(tmp_path)
+        return model
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
 
 
 def load_model() -> None:
@@ -194,6 +268,21 @@ def load_model() -> None:
                     return
                 except Exception as manual_exc:
                     MODEL_LOAD_ERRORS.append(f"{path} manual load: {manual_exc}")
+                try:
+                    MODEL = load_weights_only_from_keras_archive(path)
+                    MODEL_SOURCE = f"{path} (weights-only fallback)"
+                    MODEL_USABLE, MODEL_DIAGNOSTIC = evaluate_model_health(MODEL)
+                    return
+                except Exception as weights_exc:
+                    MODEL_LOAD_ERRORS.append(f"{path} weights-only fallback: {weights_exc}")
+            elif path.suffix == ".h5":
+                try:
+                    MODEL = load_weights_only_from_h5(path)
+                    MODEL_SOURCE = f"{path} (weights-only fallback)"
+                    MODEL_USABLE, MODEL_DIAGNOSTIC = evaluate_model_health(MODEL)
+                    return
+                except Exception as weights_exc:
+                    MODEL_LOAD_ERRORS.append(f"{path} weights-only fallback: {weights_exc}")
 
     if MODEL_LOAD_ERRORS:
         MODEL_SOURCE = "model_load_failed"
@@ -207,7 +296,6 @@ def load_model() -> None:
 def load_keras_archive_manually(path: Path):
     if h5py is None:
         raise ValueError("h5py is unavailable, so manual .keras loading cannot be used.")
-
     if not zipfile.is_zipfile(path):
         raise ValueError("File is not a valid .keras archive.")
 
@@ -217,8 +305,6 @@ def load_keras_archive_manually(path: Path):
             raise ValueError("The .keras archive does not contain config.json or model.weights.h5.")
 
         config = json.loads(archive.read("config.json").decode("utf-8"))
-
-        # Rebuild the model from serialized config and then map archived weights by layer name.
         if hasattr(keras, "saving") and hasattr(keras.saving, "deserialize_keras_object"):
             model = keras.saving.deserialize_keras_object(config)
         else:
@@ -259,7 +345,6 @@ def load_keras_archive_manually(path: Path):
                     key=int,
                 )
                 layer_weights = [np.array(vars_group[key]) for key in weight_keys]
-
                 if not layer_weights:
                     raise ValueError(f"No tensors found in archived weights for layer '{layer.name}'.")
 
@@ -297,8 +382,15 @@ def select_model(model_choice: str) -> dict:
             },
         )
 
+    source_text = MODEL_SOURCE.lower()
+    if "model.h5" in source_text:
+        ACTIVE_MODEL_CHOICE = "h5"
+    elif "model.keras" in source_text:
+        ACTIVE_MODEL_CHOICE = "keras"
+
     return {
         "status": "ok",
+        "requested_model_choice": normalized,
         "active_model_choice": ACTIVE_MODEL_CHOICE,
         "model_loaded": True,
         "model_source": MODEL_SOURCE,
@@ -308,16 +400,18 @@ def select_model(model_choice: str) -> dict:
 
 
 def evaluate_model_health(model) -> tuple[bool, str]:
-    test_vectors = np.array(
-        [
-            [0.0] * 33,
-            [1.0] * 33,
-            [0.1] * 33,
-            [0.0, 1.0] * 16 + [0.0],
-            [1.0, 0.0] * 16 + [1.0],
-        ],
-        dtype=np.float32,
-    )
+    baseline = default_record()
+    varied_records = []
+    for category_level in range(4):
+        record = dict(baseline)
+        for criterion in CRITERIA:
+            record[criterion_applicable_field(criterion["id"])] = category_level > 0
+            record[criterion_level_field(criterion["id"])] = category_level
+        varied_records.append(feature_vector(record))
+
+    varied_records.append(np.ones(FEATURE_INPUT_DIM, dtype=np.float32))
+    varied_records.append(np.zeros(FEATURE_INPUT_DIM, dtype=np.float32))
+    test_vectors = np.stack(varied_records).astype(np.float32)
 
     try:
         predictions = np.array(model.predict(test_vectors, verbose=0), dtype=np.float32)
@@ -329,104 +423,9 @@ def evaluate_model_health(model) -> tuple[bool, str]:
 
     top_classes = np.argmax(predictions, axis=1)
     top_confidences = np.max(predictions, axis=1)
-
     if len(set(top_classes.tolist())) == 1 and float(np.min(top_confidences)) >= 0.99:
         return False, "degenerate_constant_prediction"
-
     return True, "ok"
-
-
-def feature_vector(payload: KIIObjectPayload) -> np.ndarray:
-    base_features = [
-        payload.process_criticality / 10.0,
-        min(payload.supported_users / 10_000_000.0, 1.0),
-        min(payload.territories_count / 89.0, 1.0),
-        min(payload.annual_financial_loss_million / 10_000.0, 1.0),
-        min(payload.recovery_time_hours / 168.0, 1.0),
-        min(payload.critical_processes / 50.0, 1.0),
-        min(payload.interactions_count / 200.0, 1.0),
-        min(payload.personal_data_subjects / 10_000_000.0, 1.0),
-        min(payload.employees_affected / 1_000_000.0, 1.0),
-        float(payload.continuous_operation),
-        float(payload.scada_used),
-        float(payload.government_services),
-        float(payload.life_safety_impact),
-        float(payload.ecological_impact),
-        float(payload.defense_impact),
-        float(payload.public_order_impact),
-        float(payload.transport_disruption),
-        float(payload.communications_disruption),
-        float(payload.classified_info),
-    ]
-
-    sector_flags = [1.0 if payload.sector == item else 0.0 for item in SECTORS]
-    ownership_flags = [1.0 if payload.ownership_level == item else 0.0 for item in OWNERSHIP_LEVELS]
-    service_scale_flags = [
-        1.0 if payload.service_scale == "regional" else 0.0,
-        1.0 if payload.service_scale == "federal" else 0.0,
-        1.0 if payload.service_scale == "intersectoral" else 0.0,
-    ]
-
-    values = base_features + sector_flags + ownership_flags + service_scale_flags
-    return np.array([values], dtype=np.float32)
-
-
-def heuristic_score(payload: KIIObjectPayload) -> int:
-    score = 0.0
-    score += payload.process_criticality * 5
-    score += min(payload.supported_users / 500_000.0, 15)
-    score += min(payload.territories_count * 2.0, 12)
-    score += min(payload.annual_financial_loss_million / 500.0, 12)
-    score += min(payload.recovery_time_hours / 8.0, 10)
-    score += min(payload.critical_processes * 1.5, 10)
-    score += min(payload.interactions_count / 20.0, 8)
-    score += min(payload.personal_data_subjects / 200_000.0, 8)
-    score += min(payload.employees_affected / 10_000.0, 6)
-
-    score += 7 if payload.life_safety_impact else 0
-    score += 7 if payload.defense_impact else 0
-    score += 6 if payload.public_order_impact else 0
-    score += 5 if payload.ecological_impact else 0
-    score += 5 if payload.transport_disruption else 0
-    score += 5 if payload.communications_disruption else 0
-    score += 4 if payload.scada_used else 0
-    score += 4 if payload.government_services else 0
-    score += 3 if payload.continuous_operation else 0
-    score += 3 if payload.classified_info else 0
-
-    if payload.ownership_level == "federal":
-        score += 4
-    elif payload.ownership_level == "regional":
-        score += 2
-
-    if payload.service_scale == "intersectoral":
-        score += 5
-    elif payload.service_scale == "federal":
-        score += 3
-    elif payload.service_scale == "regional":
-        score += 1
-
-    return int(min(round(score), 100))
-
-
-def score_to_class(score: int) -> int:
-    if score < 25:
-        return 0
-    if score < 50:
-        return 1
-    if score < 75:
-        return 2
-    return 3
-
-
-def heuristic_distribution(score_class: int) -> np.ndarray:
-    distributions = {
-        0: np.array([0.74, 0.16, 0.07, 0.03], dtype=np.float32),
-        1: np.array([0.11, 0.63, 0.18, 0.08], dtype=np.float32),
-        2: np.array([0.05, 0.17, 0.61, 0.17], dtype=np.float32),
-        3: np.array([0.03, 0.08, 0.20, 0.69], dtype=np.float32),
-    }
-    return distributions[score_class]
 
 
 def model_distribution(features: np.ndarray) -> np.ndarray:
@@ -434,54 +433,16 @@ def model_distribution(features: np.ndarray) -> np.ndarray:
         return np.array([0.25, 0.25, 0.25, 0.25], dtype=np.float32)
 
     try:
-        prediction = MODEL.predict(features, verbose=0)[0]
+        prediction = MODEL.predict(np.array([features], dtype=np.float32), verbose=0)[0]
         prediction = np.array(prediction, dtype=np.float32)
         if prediction.shape[0] != 4:
             return np.array([0.25, 0.25, 0.25, 0.25], dtype=np.float32)
-
         total = float(prediction.sum())
         if total <= 0:
             return np.array([0.25, 0.25, 0.25, 0.25], dtype=np.float32)
-
         return prediction / total
     except Exception:
         return np.array([0.25, 0.25, 0.25, 0.25], dtype=np.float32)
-
-
-def key_factors(payload: KIIObjectPayload) -> list[str]:
-    factors: list[str] = []
-
-    if payload.life_safety_impact:
-        factors.append("влияние на жизнь и здоровье людей")
-    if payload.defense_impact:
-        factors.append("влияние на оборону и безопасность государства")
-    if payload.public_order_impact:
-        factors.append("влияние на общественный порядок")
-    if payload.scada_used:
-        factors.append("наличие АСУ ТП или технологического контура")
-    if payload.service_scale in {"federal", "intersectoral"}:
-        factors.append("масштаб оказания услуг выше локального уровня")
-    if payload.supported_users >= 1_000_000:
-        factors.append("большое число пользователей или потребителей")
-    if payload.annual_financial_loss_million >= 1_000:
-        factors.append("существенный потенциальный финансовый ущерб")
-    if payload.recovery_time_hours >= 24:
-        factors.append("длительное восстановление после отказа")
-
-    return factors[:5]
-
-
-def build_summary(payload: KIIObjectPayload, category_name: str, score: int) -> str:
-    summary = [
-        f"Объект '{payload.object_name}' отнесен к категории '{category_name}'.",
-        f"Интегральная оценка значимости: {score}/100.",
-    ]
-
-    factors = key_factors(payload)
-    if factors:
-        summary.append("Ключевые факторы: " + ", ".join(factors) + ".")
-
-    return " ".join(summary)
 
 
 @app.on_event("startup")
@@ -493,6 +454,13 @@ def startup_event() -> None:
 def health():
     return {
         "status": "ok",
+        "schema": "methodology_8_3_indicators",
+        "feature_input_dim": FEATURE_INPUT_DIM,
+        "criteria_count": len(CRITERIA),
+        "sectors_supported": len(SECTORS),
+        "ownership_levels": OWNERSHIP_LEVELS,
+        "service_scales": SERVICE_SCALES,
+        "object_types": OBJECT_TYPES,
         "model_loaded": MODEL is not None,
         "model_usable": MODEL_USABLE,
         "model_source": MODEL_SOURCE,
@@ -510,32 +478,32 @@ def set_model(payload: ModelSelectionPayload):
 
 @app.post("/predict")
 def predict(payload: KIIObjectPayload):
-    features = feature_vector(payload)
-    score = heuristic_score(payload)
-    score_class = score_to_class(score)
-    heuristics = heuristic_distribution(score_class)
+    record = payload_to_record(payload)
+    features = feature_vector(record)
+    rule_class = derive_category_level(record)
+    score = methodology_score(record)
+    heuristics = heuristic_distribution(record)
     model_probs = model_distribution(features)
-
-    combined = (heuristics * 0.55) + (model_probs * 0.45)
-    final_class = max(int(np.argmax(combined)), score_class)
-    category_name = CATEGORY_MAP[final_class]
-    confidence = float(round(combined[final_class], 4))
+    combined = (heuristics * 0.35) + (model_probs * 0.65)
+    confidence = float(round(max(float(combined[rule_class]), float(heuristics[rule_class])), 4))
+    category_name = CATEGORY_MAP[rule_class]
 
     return {
         "predicted_category": category_name,
+        "category_level": rule_class,
         "significance_score": score,
-        "category_level": final_class,
-        "heuristic_class": score_class,
         "confidence": confidence,
+        "methodology_rule": "max_applicable_indicator_level",
+        "criterion_assessments": criterion_results(record),
+        "key_factors": key_factors(record),
+        "summary": build_summary(record),
+        "recommendations": RECOMMENDATIONS[rule_class],
         "model_loaded": MODEL is not None,
         "model_usable": MODEL_USABLE,
         "model_source": MODEL_SOURCE,
         "model_diagnostic": MODEL_DIAGNOSTIC,
-        "model_role": "supporting_classifier" if MODEL_USABLE else "heuristic_only",
+        "model_role": "supporting_classifier" if MODEL_USABLE else "methodology_only",
         "heuristic_probabilities": named_probabilities(heuristics),
         "model_probabilities": named_probabilities(model_probs),
         "combined_probabilities": named_probabilities(combined),
-        "key_factors": key_factors(payload),
-        "summary": build_summary(payload, category_name, score),
-        "recommendations": RECOMMENDATIONS[final_class],
     }

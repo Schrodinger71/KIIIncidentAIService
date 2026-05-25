@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib.util
 import json
 import os
@@ -5,7 +7,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INFERENCE_DIR = PROJECT_ROOT / "inference-api"
@@ -35,28 +36,44 @@ def load_app_module():
 def build_payload() -> dict:
     return {
         "object_name": "Тестовый объект КИИ",
-        "sector": "energy",
-        "ownership_level": "federal",
+        "sectors": ["communications", "real_estate"],
+        "ownership_level": "regional",
         "service_scale": "regional",
-        "process_criticality": 6,
-        "supported_users": 500000,
-        "territories_count": 12,
-        "annual_financial_loss_million": 850.0,
-        "recovery_time_hours": 12,
-        "critical_processes": 5,
-        "interactions_count": 18,
-        "personal_data_subjects": 120000,
-        "employees_affected": 2500,
+        "object_type": "information_system",
+        "process_criticality": 7,
+        "critical_process_count": 4,
+        "interaction_count": 18,
         "continuous_operation": True,
-        "scada_used": True,
-        "government_services": False,
-        "life_safety_impact": False,
-        "ecological_impact": False,
-        "defense_impact": False,
-        "public_order_impact": False,
-        "transport_disruption": False,
-        "communications_disruption": False,
-        "classified_info": False,
+        "scada_used": False,
+        "classified_info": True,
+        "life_health_applicable": False,
+        "life_health_level": 0,
+        "life_support_applicable": True,
+        "life_support_level": 1,
+        "transport_applicable": False,
+        "transport_level": 0,
+        "communications_applicable": True,
+        "communications_level": 2,
+        "government_service_applicable": True,
+        "government_service_level": 2,
+        "government_function_applicable": True,
+        "government_function_level": 1,
+        "international_treaty_applicable": False,
+        "international_treaty_level": 0,
+        "entity_income_loss_applicable": False,
+        "entity_income_loss_level": 0,
+        "federal_budget_loss_applicable": False,
+        "federal_budget_loss_level": 0,
+        "financial_market_applicable": False,
+        "financial_market_level": 0,
+        "environment_applicable": False,
+        "environment_level": 0,
+        "control_center_applicable": True,
+        "control_center_level": 1,
+        "defense_order_applicable": False,
+        "defense_order_level": 0,
+        "defense_security_system_applicable": False,
+        "defense_security_system_level": 0,
     }
 
 
@@ -85,6 +102,10 @@ def main():
 
     if not health_data.get("model_loaded") or not health_data.get("model_usable"):
         print("\nПРОВЕРКА НЕ ПРОЙДЕНА: API не считает модель пригодной для использования.")
+        raise SystemExit(1)
+
+    if predict_data.get("category_level") != 2:
+        print("\nПРОВЕРКА НЕ ПРОЙДЕНА: методическое правило должно вернуть вторую категорию.")
         raise SystemExit(1)
 
     if predict_data.get("model_role") != "supporting_classifier":

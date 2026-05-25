@@ -2,11 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY dashboard/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ./
-COPY data ./data
+COPY dashboard/app.py ./app.py
+COPY kii_methodology.py ./kii_methodology.py
+COPY dashboard/data ./data
 
 EXPOSE 8501
 

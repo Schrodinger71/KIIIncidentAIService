@@ -2,11 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY inference-api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ./
-COPY models ./models
+COPY inference-api/app.py ./app.py
+COPY kii_methodology.py ./kii_methodology.py
+COPY inference-api/models ./models
 
 EXPOSE 8000
 
