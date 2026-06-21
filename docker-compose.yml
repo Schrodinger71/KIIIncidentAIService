@@ -1,4 +1,4 @@
-services:
+﻿services:
   inference-api:
     container_name: kii-significance-inference-api
     build:
@@ -9,6 +9,18 @@ services:
       ALLOW_MODEL_FALLBACK: "true"
     ports:
       - "8008:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:8000/health\").status == 200 else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
 
   dashboard:
     container_name: kii-significance-dashboard
@@ -23,4 +35,17 @@ services:
     volumes:
       - ./dashboard/data:/app/data
     depends_on:
-      - inference-api
+      inference-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:8501/_stcore/health\").status == 200 else 1)",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 30s

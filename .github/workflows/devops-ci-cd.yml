@@ -1,0 +1,200 @@
+﻿name: DevOps CI/CD
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-model:
+    name: Validate Model And API Logic
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            inference-api/requirements.txt
+            model-training/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r inference-api/requirements.txt
+          pip install -r model-training/requirements.txt
+
+      - name: Run inference validation
+        run: python model-training/validate_inference.py
+
+  docker-smoke:
+    name: Build Containers And Smoke Test
+    runs-on: ubuntu-latest
+    needs: validate-model
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and start services
+        run: docker compose up -d --build
+
+      - name: Wait for API and dashboard health endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          check_url() {
+            local url="$1"
+            local name="$2"
+
+            for attempt in {1..30}; do
+              if curl --fail --silent "$url" >/dev/null; then
+                echo "$name is healthy."
+                return 0
+              fi
+              sleep 5
+            done
+
+            echo "$name did not become healthy in time."
+            docker compose logs
+            return 1
+          }
+
+          check_url "http://localhost:8008/health" "inference-api"
+          check_url "http://localhost:8501/_stcore/health" "dashboard"
+
+      - name: Verify prediction endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > payload.json <<'EOF'
+          {
+            "object_name": "CI smoke test object",
+            "sectors": ["communications", "real_estate"],
+            "ownership_level": "regional",
+            "service_scale": "regional",
+            "object_type": "information_system",
+            "process_criticality": 7,
+            "critical_process_count": 4,
+            "interaction_count": 18,
+            "continuous_operation": true,
+            "scada_used": false,
+            "classified_info": true,
+            "life_health_applicable": false,
+            "life_health_level": 0,
+            "life_support_applicable": true,
+            "life_support_level": 1,
+            "transport_applicable": false,
+            "transport_level": 0,
+            "communications_applicable": true,
+            "communications_level": 2,
+            "government_service_applicable": true,
+            "government_service_level": 2,
+            "government_function_applicable": true,
+            "government_function_level": 1,
+            "international_treaty_applicable": false,
+            "international_treaty_level": 0,
+            "entity_income_loss_applicable": false,
+            "entity_income_loss_level": 0,
+            "federal_budget_loss_applicable": false,
+            "federal_budget_loss_level": 0,
+            "financial_market_applicable": false,
+            "financial_market_level": 0,
+            "environment_applicable": false,
+            "environment_level": 0,
+            "control_center_applicable": true,
+            "control_center_level": 1,
+            "defense_order_applicable": false,
+            "defense_order_level": 0,
+            "defense_security_system_applicable": false,
+            "defense_security_system_level": 0
+          }
+          EOF
+
+          curl --fail --silent \
+            --header "Content-Type: application/json" \
+            --data @payload.json \
+            http://localhost:8008/predict > response.json
+
+          python - <<'PY'
+          import json
+
+          with open("response.json", "r", encoding="utf-8") as file:
+              response = json.load(file)
+
+          assert response["category_level"] == 2, response
+          assert response["predicted_category"], response
+          assert response["model_role"] == "supporting_classifier", response
+          PY
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
+
+  publish-images:
+    name: Publish Docker Images To GHCR
+    runs-on: ubuntu-latest
+    needs: docker-smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image_name: kii-significance-inference-api
+            dockerfile: inference-api/Dockerfile
+          - image_name: kii-significance-dashboard
+            dockerfile: dashboard/Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Normalize registry namespace
+        id: vars
+        shell: bash
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ matrix.image_name }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image_name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image_name }}
